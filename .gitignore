@@ -30,3 +30,9 @@ dist-ssr
 .env.local
 .vercel
 node_modules/dist/build/.env.DS_Store.vercel
+# secrets/env – do not commit
+.env*
+server/*.json
+*.p12
+*.pem
+*.key
