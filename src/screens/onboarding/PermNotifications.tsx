@@ -1,99 +1,195 @@
 // src/screens/onboarding/PermNotifications.tsx
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import OnboardFrame from '../../components/OnboardFrame';
-import useOnboarding from '../../store/onboarding';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { gateNotifications } from '../../lib/permGate';
 import {
-  setPermPolicy,
   decidePerm,
-  type PermPolicy,
+  setPermPolicy,
+  allowForThisSession,
+  type PermDecision,
 } from '../../lib/permPrefs';
-
-type Choice = PermPolicy | null;
+import { emit } from '../../lib/events';
 
 export default function PermNotifications() {
   const nav = useNavigate();
-  const { setStep, setPerm } = useOnboarding();
-  const [choice, setChoice] = useState<Choice>(null);
+  const loc = useLocation();
 
-  useEffect(() => setStep('permNotifications'), [setStep]);
-
-  // ✅ Skip if this permission is already decided for this tab/session
+  // Came from Unlock pre-nudge (so don’t auto-nudge again)
+  const prenudged = sessionStorage.getItem('bw.perm.prenudge') === '1';
   useEffect(() => {
-    if (decidePerm('notifications') !== 'ask') {
-      goNext(true); // don't re-write state; just advance
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    try { sessionStorage.removeItem('bw.perm.prenudge'); } catch {}
   }, []);
 
-  const canNext = choice != null;
+  const [dec, setDec] = useState<PermDecision>(() => decidePerm('notifications'));
+  const [busy, setBusy] = useState(false);
 
-  async function goNext(skipSelf = false) {
-    if (!skipSelf) {
-      // 1) Persist user’s UI choice (always/never -> localStorage, session -> sessionStorage)
-      setPermPolicy('notifications', choice as PermPolicy);
+  // Correct unsupported detection
+  const unsupported = useMemo(() => {
+    const g = gateNotifications();
+    return !g.ok && g.reason === 'unsupported';
+  }, []);
 
-      // 2) Reflect in onboarding store and (optionally) talk to browser
-      if (choice === 'never') {
-        setPerm('notifications', 'denied');
-      } else if (choice === 'session') {
-        // Session-only: allow inside the app for this tab, but DO NOT call the browser prompt
-        setPerm('notifications', 'granted');
-      } else {
-        // 'always' -> request browser permission if possible, mirror the real result
-        if (
-          typeof Notification !== 'undefined' &&
-          typeof Notification.requestPermission === 'function'
-        ) {
-          try {
-            const res = await Notification.requestPermission();
-            setPerm('notifications', res === 'granted' ? 'granted' : 'denied');
-          } catch {
-            setPerm('notifications', 'granted'); // best effort fallback
-          }
-        } else {
-          setPerm('notifications', 'granted');
-        }
-      }
+  // Debug
+  try { console.log('[Perm/Notifications] gate =', gateNotifications()); } catch {}
+
+  // Skip ahead if already allowed
+  useEffect(() => {
+    if (dec === 'allow') {
+      setTimeout(() => nav('/onboarding/perm/mic', { replace: true }), 0);
     }
+  }, [dec, nav]);
 
-    // Continue to Mic
+  // Auto-nudge when arriving from unlock/resume (unless we already prenudged)
+  useEffect(() => {
+    const from = new URLSearchParams(loc.search).get('from');
+    if (from && dec === 'ask' && !unsupported && !prenudged) {
+      const id = setTimeout(() => nudgeNativePrompt().catch(() => {}), 250);
+      return () => clearTimeout(id);
+    }
+  }, [loc.search, dec, unsupported, prenudged]);
+
+  async function nudgeNativePrompt() {
+    try {
+      if ('Notification' in window && (Notification as any).requestPermission) {
+        const res = await (Notification as any).requestPermission();
+        if (res === 'granted') allowForThisSession('notifications');
+        emit('bw:perm:changed', null);
+        setDec(decidePerm('notifications'));
+      }
+    } catch {
+      // no-op
+    }
+  }
+
+  async function chooseAlways() {
+    setBusy(true);
+    try {
+      setPermPolicy('notifications', 'always');
+      await nudgeNativePrompt();
+      emit('bw:perm:changed', null);
+      setDec(decidePerm('notifications'));
+      nav('/onboarding/perm/mic', { replace: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function chooseSession() {
+    setBusy(true);
+    try {
+      allowForThisSession('notifications');
+      await nudgeNativePrompt();
+      emit('bw:perm:changed', null);
+      setDec(decidePerm('notifications'));
+      nav('/onboarding/perm/mic', { replace: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function chooseNever() {
+    setPermPolicy('notifications', 'never');
+    emit('bw:perm:changed', null);
+    setDec(decidePerm('notifications'));
     nav('/onboarding/perm/mic', { replace: true });
   }
 
+  // ---- Option A: Send test notification ----
+  function showLocalTestNotification() {
+    try {
+      new Notification('🍔 BiteWise Test', {
+        body: 'Looks like notifications work!',
+        silent: false,
+      });
+    } catch {
+      // If constructing Notification fails, silently ignore
+    }
+  }
+
+  async function sendTestNotification() {
+    if (unsupported || !('Notification' in window)) {
+      alert('Notifications are not supported on this browser.');
+      return;
+    }
+
+    // If already granted, show immediately
+    if ((Notification as any).permission === 'granted') {
+      showLocalTestNotification();
+      return;
+    }
+
+    // Otherwise, ask once and then show if granted
+    try {
+      const res = await (Notification as any).requestPermission?.();
+      if (res === 'granted') {
+        allowForThisSession('notifications');
+        emit('bw:perm:changed', null);
+        setDec(decidePerm('notifications'));
+        showLocalTestNotification();
+      } else if (res === 'denied') {
+        // Friendly nudge if blocked
+        try {
+          window.dispatchEvent(new CustomEvent('bw:toast', {
+            detail: { title: 'Notifications blocked', body: 'Please allow notifications in your browser settings.' }
+          } as any));
+        } catch {}
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   return (
-    <OnboardFrame
-      step="permNotifications"
-      backTo="/onboarding/perm/location"
-      title="Notifications"
-      subtitle="Order updates."
-      nextLabel="Next"
-      nextDisabled={!canNext}
-      onNext={() => goNext(false)}
-    >
-      <div className="space-y-3">
-        {(['never', 'session', 'always'] as PermPolicy[]).map(opt => {
-          const selected = choice === opt;
-          return (
-            <button
-              key={opt}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => setChoice(opt)}
-              className={[
-                'w-full rounded-xl border px-4 py-3 transition',
-                selected ? 'bg-black text-white' : 'bg-transparent hover:bg-white/10',
-              ].join(' ')}
-            >
-              {opt === 'never'
-                ? "Don't allow"
-                : opt === 'session'
-                ? 'Only this time'
-                : 'Allow while using the app'}
-            </button>
-          );
-        })}
+    <div className="min-h-dvh grid place-items-center px-4">
+      <div className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-5 shadow-lg animate-fade-up">
+        <h1 className="text-2xl font-bold">Enable Notifications</h1>
+        <p className="text-sm text-gray-600">
+          Get price drops, order updates, and task rewards instantly.
+        </p>
+
+        {unsupported && (
+          <div className="rounded-xl border p-3 text-sm">
+            Notifications aren’t supported in this browser. You can continue.
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <button
+            onClick={chooseAlways}
+            disabled={busy || unsupported}
+            className="w-full rounded-xl bg-black text-white py-3 disabled:opacity-50"
+          >
+            Always allow
+          </button>
+          <button
+            onClick={chooseSession}
+            disabled={busy || unsupported}
+            className="w-full rounded-xl border py-3 disabled:opacity-50"
+          >
+            Only this time
+          </button>
+          <button
+            onClick={chooseNever}
+            disabled={busy}
+            className="w-full rounded-xl border py-3"
+          >
+            Don’t allow
+          </button>
+        </div>
+
+        {/* Test notification CTA (visible even before grant; it will request permission if needed) */}
+        {!unsupported && (
+          <button
+            onClick={sendTestNotification}
+            className="w-full rounded-xl border py-2 mt-2"
+            title="Send a local test notification"
+          >
+            Send test notification
+          </button>
+        )}
+
+        <p className="text-xs text-gray-500">You can change this later in Settings.</p>
       </div>
-    </OnboardFrame>
+    </div>
   );
 }

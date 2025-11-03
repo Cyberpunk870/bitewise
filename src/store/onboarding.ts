@@ -2,10 +2,8 @@
 import { create } from 'zustand';
 import persistUtils from './persist';
 
-/** Permission status we track per capability */
 export type PermStatus = 'unknown' | 'granted' | 'denied' | 'unavailable';
 
-/** All onboarding steps */
 export type OnboardStep =
   | 'welcome'
   | 'name'
@@ -20,14 +18,7 @@ export type OnboardStep =
   | 'finish'
   | 'done';
 
-/**
- * Steps that participate in progress UI.
- * (Exclude 'welcome' and 'done' so progress bar works correctly.)
- */
-export const PROGRESSION_STEPS: Exclude<
-  OnboardStep,
-  'welcome' | 'done'
->[] = [
+export const PROGRESSION_STEPS: Exclude<OnboardStep, 'welcome' | 'done'>[] = [
   'name',
   'dob',
   'addressPick',
@@ -39,124 +30,92 @@ export const PROGRESSION_STEPS: Exclude<
   'finish',
 ];
 
-/** Store shape */
 type State = {
-  // collected
   name: string;
   dob: string;
   addressLine: string;
+  addressLabel?: string;
   lat?: number;
   lng?: number;
   phone?: string;
-
-  // progress
   step: OnboardStep;
   complete: boolean;
-
-  // permissions
+  verified?: boolean; // ✅ added for Review compatibility
   perm: {
     location: PermStatus;
     notifications: PermStatus;
     mic: PermStatus;
   };
-
-  // actions
   setStep: (s: OnboardStep) => void;
   markComplete: () => void;
   setName: (v: string) => void;
   setDob: (v: string) => void;
   setGeocode: (v: { addressLine: string; lat: number; lng: number }) => void;
+  setAddressLabel: (v: string) => void;
   setPhone: (v: string) => void;
   setPerm: (k: keyof State['perm'], v: PermStatus) => void;
   reset: () => void;
 };
 
-/** Initial state (also used by reset) */
-const initialState: Omit<State, keyof State & 'actions'> = {
+const initialState: Omit<
+  State,
+  'setStep' | 'markComplete' | 'setName' | 'setDob' | 'setGeocode' |
+  'setAddressLabel' | 'setPhone' | 'setPerm' | 'reset'
+> = {
   name: '',
   dob: '',
   addressLine: '',
+  addressLabel: '',
   lat: undefined,
   lng: undefined,
   phone: undefined,
-
   step: 'welcome',
   complete: false,
-
+  verified: false,
   perm: { location: 'unknown', notifications: 'unknown', mic: 'unknown' },
 };
 
 export const useOnboarding = create<State>()((set) => ({
   ...initialState,
-
   setStep: (s) => set({ step: s }),
   markComplete: () => set({ complete: true, step: 'done' }),
-
   setName: (name) => set({ name }),
   setDob: (dob) => set({ dob }),
   setGeocode: ({ addressLine, lat, lng }) => set({ addressLine, lat, lng }),
+  setAddressLabel: (addressLabel) => set({ addressLabel }),
   setPhone: (phone) => set({ phone }),
-
-  setPerm: (k, v) =>
-    set((st) => ({
-      perm: {
-        ...st.perm,
-        [k]: v,
-      },
-    })),
-
-  reset: () =>
-    set({
-      ...initialState,
-    }),
+  setPerm: (k, v) => set((st) => ({ perm: { ...st.perm, [k]: v } })),
+  reset: () => set({ ...initialState }),
 }));
 
-/* ----------------------------- Persistence ----------------------------- */
-/**
- * Hydrate from your custom persist utils at module load.
- * `persistUtils` is expected to expose:
- *   - load(): Partial<State> | undefined
- *   - savePatch(patch: Partial<State>): void
- *   - clear(): void
- */
+// Hydration (unchanged)
+const persistAny: any = persistUtils || {};
 try {
-  const saved = persistUtils?.load?.();
+  const saved = persistAny?.load?.();
   if (saved && typeof saved === 'object') {
-    // Only merge the keys we actually persist
-    const {
-      name,
-      dob,
-      addressLine,
-      lat,
-      lng,
-      phone,
-      step,
-      complete,
-      perm,
-    } = saved as Partial<State>;
+    const { name, dob, addressLine, addressLabel, lat, lng, phone, step, complete, perm } = saved as Partial<State>;
     useOnboarding.setState((st) => ({
       ...st,
-      ...(name !== undefined ? { name } : null),
-      ...(dob !== undefined ? { dob } : null),
-      ...(addressLine !== undefined ? { addressLine } : null),
-      ...(lat !== undefined ? { lat } : null),
-      ...(lng !== undefined ? { lng } : null),
-      ...(phone !== undefined ? { phone } : null),
-      ...(step !== undefined ? { step } : null),
-      ...(complete !== undefined ? { complete } : null),
-      ...(perm !== undefined ? { perm } : null),
+      name: name ?? st.name,
+      dob: dob ?? st.dob,
+      addressLine: addressLine ?? st.addressLine,
+      addressLabel: addressLabel ?? st.addressLabel,
+      lat: lat ?? st.lat,
+      lng: lng ?? st.lng,
+      phone: phone ?? st.phone,
+      step: step ?? st.step,
+      complete: complete ?? st.complete,
+      perm: perm ?? st.perm,
     }));
   }
-} catch {
-  // ignore hydration errors (private mode, corrupted JSON, etc.)
-}
+} catch {}
 
-/** Save a compact patch whenever state changes */
 useOnboarding.subscribe((st) => {
-  persistUtils?.savePatch?.({
+  persistAny?.savePatch?.({
     name: st.name,
     dob: st.dob,
     addressLine: st.addressLine,
+    addressLabel: st.addressLabel,
     lat: st.lat,
     lng: st.lng,
     phone: st.phone,

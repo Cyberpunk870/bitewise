@@ -1,10 +1,12 @@
 // /src/screens/compare/Compare.tsx
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AVAILABILITY_DUMMY } from '../../data/availability';
 import type { PriceBreakdown } from '../../data/availability';
 import useCart from '../../store/cart';
 import { emit } from '../../lib/events';
+import { getLastAvailabilitySync, timeAgo } from '../../lib/dataSync';
+import { startOutbound } from '../../lib/orderReturn';
 
 type Column = PriceBreakdown & {
   subtotal: number;
@@ -37,6 +39,13 @@ export default function Compare() {
   const nav = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { items } = useCart();
+
+  const [lastSyncTs, setLastSyncTs] = useState<number | null>(() => getLastAvailabilitySync());
+  useEffect(() => {
+    const onSync = (e: Event) => setLastSyncTs((e as CustomEvent<number>).detail || Date.now());
+    window.addEventListener('bw:data:availabilitySync' as any, onSync as any);
+    return () => window.removeEventListener('bw:data:availabilitySync' as any, onSync as any);
+  }, []);
 
   const restaurant = useMemo(
     () => AVAILABILITY_DUMMY.find(r => String(r.id) === String(id)),
@@ -73,10 +82,12 @@ export default function Compare() {
     <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400 pb-20">
       <div className="max-w-4xl mx-auto w-full px-4 pt-6">
         {/* header */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <button className="px-3 py-1.5 text-sm rounded-full border bg-white/80" onClick={() => nav(-1)}>← Back</button>
           <h1 className="text-lg font-semibold text-white drop-shadow">Compare prices</h1>
-          <div className="w-20" />
+          <div className="text-[11px] text-white/90">
+            Last updated: <b className="tabular-nums">{timeAgo(lastSyncTs)}</b>
+          </div>
         </div>
 
         <div className="rounded-2xl bg-white/80 backdrop-blur p-3 mb-3">
@@ -148,17 +159,35 @@ export default function Compare() {
               </div>
 
               <button
-                className={[
-                  'mt-3 w-full px-4 py-2 rounded-xl text-white',
-                  cheaper === c.platform ? 'bg-emerald-600' : 'bg-black',
-                ].join(' ')}
-                onClick={() => {
-                  emit('bw:compare:done', { platform: c.platform, total: c.total });
-                  window.open(c.deepLink, '_blank');
-                }}
-              >
-                Order on {c.platform[0].toUpperCase() + c.platform.slice(1)}
-              </button>
+  className={[
+    'mt-3 w-full px-4 py-2 rounded-xl text-white',
+    cheaper === c.platform ? 'bg-emerald-600' : 'bg-black',
+  ].join(' ')}
+  onClick={async () => {
+    emit('bw:compare:done', { platform: c.platform, total: c.total });
+
+    // ✅ compute other total for delta (to know how much cheaper)
+    const other = columns.find(x => x.platform !== c.platform)?.total ?? c.total;
+
+    // ✅ record outbound locally + on backend
+    await startOutbound({
+      ts: Date.now(),
+      restaurantId: String(restaurant.id),
+      restaurantName: restaurant.name,
+      platform: c.platform as any,
+      total: c.total,
+      otherTotal: other,
+      delta: other - c.total,             // positive = you saved
+      tokenReward: 7,                     // adjust reward if needed
+      deepLink: c.deepLink,
+    });
+
+    // finally open the food delivery app/site
+    window.open(c.deepLink, '_blank');
+  }}
+>
+  Order on {c.platform[0].toUpperCase() + c.platform.slice(1)}
+</button>
             </div>
           ))}
         </div>

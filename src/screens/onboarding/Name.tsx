@@ -1,38 +1,43 @@
-import { useEffect, useState } from 'react';
+// src/screens/onboarding/Name.tsx
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import OnboardFrame from '../../components/OnboardFrame';
-import { useOnboarding } from '../../store/onboarding';
+import { setActiveProfileFields, getActiveProfile } from '../../lib/profileStore';
+import { pushActiveToCloud } from '../../lib/cloudProfile';
 
 export default function Name() {
   const nav = useNavigate();
-  const { name: stored, setName, setStep } = useOnboarding();
-  const [name, setLocal] = useState(stored ?? '');
+  const current = getActiveProfile();
+  const [name, setName] = useState(current?.name || '');
 
-  useEffect(() => setStep('name'), [setStep]);
+  const canNext = name.trim().length >= 2;
 
-  const handleNext = () => {
-    const v = name.trim();
-    if (!v) return;
-    setName(v);
+  async function onNext() {
+    if (!canNext) return;
+    setActiveProfileFields({ name: name.trim() });
+    try { await pushActiveToCloud(); } catch {}
     nav('/onboarding/dob', { replace: true });
-  };
+  }
 
   return (
     <OnboardFrame
       step="name"
-      backTo="/"
-      title="Let’s get to know you"
-      subtitle="Enter your name"
-      nextDisabled={!name.trim()}
-      onNext={handleNext}
+      backTo="/onboarding"
+      title="What should we call you?"
+      subtitle="Your name helps personalize your experience."
+      nextLabel="Continue"
+      nextDisabled={!canNext}
+      onNext={onNext}
     >
-      <input
-        type="text"
-        className="w-full rounded-xl border px-4 py-2 bg-white"
-        value={name}
-        placeholder="Full name"
-        onChange={(e) => setLocal(e.target.value)}
-      />
+      <div className="w-full max-w-md mx-auto space-y-3">
+        <input
+          className="w-full rounded-xl border px-4 py-2 bg-white"
+          placeholder="Your name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoComplete="name"
+        />
+      </div>
     </OnboardFrame>
   );
 }

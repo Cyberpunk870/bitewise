@@ -1,117 +1,206 @@
 // src/shell/AppShell.tsx
-import { Outlet, useNavigate } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
 import ToastHost from '../components/ToastHost';
+import RewardHost from '../components/RewardHost';
 import { clearSessionPerms, decidePerm } from '../lib/permPrefs';
-import { emit } from '../lib/events';
-import { getCurrentPosition } from '../lib/location';
 import { startTaskEngine } from '../lib/TaskEngine';
-import { startTaskAutoTracking } from '../lib/tasks';
+import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
+import { emit, on } from '../lib/events';
+import { syncTokensFromCloud } from '../lib/tokens';
+import ReturnBanner from '../components/ReturnBanner';
+// 🔄 Cloud profile
+import { hydrateActiveFromCloud, pushActiveToCloud } from '../lib/cloudProfile';
+// Passive live pings (no prompts)
+import { startLiveLocationWatcher } from '../lib/location';
 
-const IDLE_MS = 60 * 1000; // adjust
+// ✅ NEW: hook up push init when auth/permission are ready
+import { initOrRefreshPushOnAuth } from '../lib/notify';
+import { initReturnListener } from '../lib/orderReturn';
+
+const IDLE_MS = 60 * 1000;
+const FEED_KIND = import.meta.env.VITE_FEED || 'dummy';
 
 export default function AppShell() {
   const nav = useNavigate();
+  const location = useLocation();
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const stop = startTaskEngine();
-    return () => stop?.();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(async regs => {
+      const hasFM = regs.some(r => r.active?.scriptURL.includes('firebase-messaging-sw.js'));
+      if (!hasFM) {
+        try {
+          const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+          console.log('[sw] firebase-messaging-sw.js registered', reg.scope);
+        } catch (e) {
+          console.warn('[sw] register failed', e);
+        }
+      } else {
+        console.log('[sw] already registered');
+      }
+    });
+  }
+}, []);
 
-  }, []);
+  const hasActiveSession = () => {
+    try { return !!sessionStorage.getItem('bw.session.phone'); } catch { return false; }
+  };
 
-  useEffect(() => { startTaskAutoTracking(); }, []);
-
-  // ✅ One-shot: after unlock, if we set flags, trigger native prompts once
+  /* Track last route (return after unlock) */
   useEffect(() => {
-    const justUnlocked = sessionStorage.getItem('bw.justUnlocked') === '1';
-    const needsRecheck = sessionStorage.getItem('bw.requirePermRecheck') === '1';
-
-    if (justUnlocked || needsRecheck) {
-      // clear flags so it only runs once
-      try { sessionStorage.removeItem('bw.justUnlocked'); } catch {}
-      try { sessionStorage.removeItem('bw.requirePermRecheck'); } catch {}
-
-      // Fire a generic recheck signal for any UI listening
-      try { emit('bw:perm:recheck', null); } catch {}
-
-      // Location (HTTPS not strictly required for geolocation prompt)
-      if (decidePerm('location') === 'ask') {
-        getCurrentPosition(4000).catch(() => {});
-      }
-
-      // Notifications
-      if (decidePerm('notifications') === 'ask' && 'Notification' in window) {
-        setTimeout(() => {
-          try { Notification.requestPermission().catch(() => {}); } catch {}
-        }, 150);
-      }
-
-      // Microphone (requires HTTPS or localhost)
-      if (
-        decidePerm('mic') === 'ask' &&
-        navigator.mediaDevices?.getUserMedia &&
-        (location.protocol === 'https:' ||
-          ['localhost','127.0.0.1'].includes(location.hostname))
-      ) {
-        setTimeout(() => {
-          navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => stream.getTracks().forEach(t => t.stop()))
-            .catch(() => {});
-        }, 180);
-      }
+    if (
+      !location.pathname.startsWith('/onboarding') &&
+      !location.pathname.startsWith('/auth') &&
+      location.pathname !== '/unlock'
+    ) {
+      const path = location.pathname + (location.search || '');
+      setLastRoute(path);
+      try { sessionStorage.setItem('bw.lastRoute', path); } catch {}
     }
+  }, [location.pathname, location.search]);
+
+  /* Redirect on auth change ONLY from Unlock (not during onboarding) */
+  useEffect(() => {
+    const handleAuth = async () => {
+      try {
+        if (!hasActiveSession()) return;
+        const path = location.pathname;
+        const fromUnlock = path === '/unlock';
+        const inOnboarding = path.startsWith('/onboarding');
+        if (!fromUnlock || inOnboarding) return;
+
+        // ✅ ensure push is “registered” locally when we successfully unlock
+        try { await initOrRefreshPushOnAuth(getActivePhone() || undefined); } catch {}
+
+        const last = sessionStorage.getItem('bw.lastRoute') || getLastRoute() || '/home';
+        setTimeout(() => nav(last, { replace: true }), 0);
+      } catch {
+        setTimeout(() => nav('/home', { replace: true }), 0);
+      }
+    };
+    const off = on('bw:auth:changed', handleAuth);
+    return () => off();
+  }, [nav, location.pathname]);
+
+  /* PERMISSION RECHECK → route to wizard (no silent prompts here) */
+  useEffect(() => {
+  const run = async () => {
+    try {
+      const authed = !!getAuth().currentUser;
+      if (authed && hasActiveSession() && getActivePhone()) {
+        await hydrateActiveFromCloud();
+        await pushActiveToCloud();
+        await syncTokensFromCloud();
+      }
+    } catch {}
+  };
+  run();
+  const off = on('bw:auth:changed', run);
+  return () => off();
+}, []);
+
+  /* ✅ NEW: if notifications flip to granted at runtime, init push */
+  useEffect(() => {
+    const onPermChanged = async () => {
+      try {
+        if (decidePerm('notifications') === 'allow' && hasActiveSession()) {
+          await initOrRefreshPushOnAuth(getActivePhone() || undefined);
+        }
+      } catch {}
+    };
+    const off = on('bw:perm:recheck', onPermChanged);
+    window.addEventListener('storage', onPermChanged);
+    return () => {
+      off();
+      window.removeEventListener('storage', onPermChanged);
+    };
   }, []);
 
+  useEffect(() => {
+    const stop = initReturnListener();
+    return () => stop && stop();
+    
+  }, []);
+
+  /* Cloud hydrate/push */
+  useEffect(() => {
+    const run = async () => {
+      try {
+        if (hasActiveSession() && getActivePhone()) {
+          await hydrateActiveFromCloud();
+          await pushActiveToCloud();
+        }
+      } catch {}
+    };
+    run();
+    const off = on('bw:auth:changed', run);
+    return () => off();
+  }, []);
+
+  /* Idle logout */
   useEffect(() => {
     const auth = getAuth();
-
-
+    const inAuthContext = () => {
+      const p = location.pathname;
+      return p.startsWith('/onboarding') || p.startsWith('/auth') || p === '/unlock';
+    };
     const clearTimer = () => {
       if (timerRef.current != null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
     };
-
     const scheduleLogout = () => {
       clearTimer();
+      // ⛔️ Do not arm an idle logout if there is no active session OR we're inside onboarding/auth
+      if (!hasActiveSession() || inAuthContext()) return;
       timerRef.current = window.setTimeout(async () => {
-        try {
-          sessionStorage.setItem('bw.logoutReason', 'idle');
-          const lastPhone = sessionStorage.getItem('bw.session.phone') || '';
-          if (lastPhone) localStorage.setItem('bw.lastPhone', lastPhone);
+  // 1. mark reason + remember phone for prefill
+  const lastPhone =
+    sessionStorage.getItem('bw.session.phone') || '' ;
 
-          try { await signOut(auth); } catch {}
+  try {
+    sessionStorage.setItem('bw.logoutReason', 'idle');
+    if (lastPhone) {
+      try { localStorage.setItem('bw.lastPhone', lastPhone); } catch {}
+    }
 
-          try {
-            sessionStorage.removeItem('bw.session.phone');
-            localStorage.removeItem('bw.idle.until');
-          } catch {}
+    // 2. hard sign out of Firebase so tokens are dead
+    try {
+      await signOut(getAuth());
+    } catch {
+      // ignore network / already-signed-out errors
+    }
 
-          try { clearSessionPerms(); } catch {}
+    // 3. clear in-tab auth hints
+    try {
+      sessionStorage.removeItem('bw.session.phone');
+      localStorage.removeItem('bw.idle.until');
+    } catch {}
 
-          // Mark that we must re-prompt after the next unlock
-          try { sessionStorage.setItem('bw.requirePermRecheck', '1'); } catch {}
-
-          try { window.dispatchEvent(new Event('bw:perm:changed')); } catch {}
-          try { window.dispatchEvent(new Event('bw:auth:changed')); } catch {}
-          try {
-            window.dispatchEvent(
-              new StorageEvent('storage', { key: 'bw.session.phone', newValue: null as any })
-            );
-          } catch {}
-        } finally {
-          setTimeout(() => nav('/unlock', { replace: true }), 0);
-        }
-      }, IDLE_MS);
+    // 4. broadcast auth change (cart badges, balances, etc.)
+    try { window.dispatchEvent(new Event('bw:auth:changed')); } catch {}
+    try {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'bw.session.phone',
+          newValue: null as any,
+        }) as any
+      );
+    } catch {}
+  } finally {
+    // 5. go to /unlock
+    setTimeout(() => nav('/unlock', { replace: true }), 0);
+  }
+}, IDLE_MS);
     };
-
     const onActivity = () => {
       if (document.visibilityState === 'visible') scheduleLogout();
     };
-
+    // initial arm/skip
     scheduleLogout();
     const opts: AddEventListenerOptions = { passive: true };
     window.addEventListener('mousemove', onActivity, opts);
@@ -122,7 +211,12 @@ export default function AppShell() {
     window.addEventListener('pointerdown', onActivity, opts);
     window.addEventListener('touchstart', onActivity, opts);
     window.addEventListener('visibilitychange', onActivity, opts);
-
+    // reschedule when the session phone changes
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key || e.key === 'bw.session.phone') scheduleLogout();
+    };
+    window.addEventListener('storage', onStorage);
+    // cleanup
     return () => {
       clearTimer();
       window.removeEventListener('mousemove', onActivity, opts);
@@ -133,13 +227,50 @@ export default function AppShell() {
       window.removeEventListener('pointerdown', onActivity, opts);
       window.removeEventListener('touchstart', onActivity, opts);
       window.removeEventListener('visibilitychange', onActivity, opts);
+      window.removeEventListener('storage', onStorage);
     };
-  }, [nav]);
+  }, [nav, location.pathname]);
+
+  /* Feed boot */
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    (async () => {
+      try {
+        if (FEED_KIND === 'actowiz') {
+          const m = await import('../lib/feed/ActowizAdapter');
+          stop = m.startActowizFeed({
+            apiBase: import.meta.env.VITE_ACTOWIZ_API,
+            token: import.meta.env.VITE_ACTOWIZ_TOKEN,
+          });
+        } else {
+          const m = await import('../lib/feed/DummyAdapter');
+          stop = m.startDummyFeed();
+        }
+      } catch (err) {
+        console.error('Feed init failed', err);
+      }
+    })();
+    return () => { stop?.(); };
+  }, []);
+
+  /* Tasks engine */
+  useEffect(() => {
+    const stop = startTaskEngine();
+    return () => stop?.();
+  }, []);
+
+  /* Passive live pings */
+  useEffect(() => {
+    const stop = startLiveLocationWatcher(20000);
+    return () => stop();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400">
       <Outlet />
+      <RewardHost />
       <ToastHost />
+      <ReturnBanner />
     </div>
   );
 }

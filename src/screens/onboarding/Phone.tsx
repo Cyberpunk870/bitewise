@@ -1,98 +1,90 @@
-import { useEffect, useState } from 'react';
+// src/screens/onboarding/Phone.tsx
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import OnboardFrame from '../../components/OnboardFrame';
-import useOnboarding from '../../store/onboarding';
-import { clearPhoneSession, sendOtp } from '../../lib/firebase';
-import { hasUser } from '../../lib/profileStore';
-
-declare global {
-  interface Window {
-    grecaptcha?: { reset: (widgetId?: number) => void };
-  }
-}
+import { ensureRecaptcha, sendOtp, clearRecaptcha } from '../../lib/firebase';
+import { useAuth } from '../../store/auth';
 
 export default function Phone() {
   const nav = useNavigate();
-  const { setStep } = useOnboarding();
-  const [busy, setBusy] = useState(false);
-  const [phoneLocal10, setPhoneLocal10] = useState('');
   const [params] = useSearchParams();
+  const mode = (params.get('mode') || 'signup') as 'signup' | 'login';
+  const { phone, setPhone, setConfirmation } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => setStep('phone'), [setStep]);
+  const e164 = useMemo(() => {
+    const raw = (phone || '').replace(/[^\d+]/g, '');
+    if (raw.startsWith('+')) return raw;
+    if (/^\d{10}$/.test(raw)) return `+91${raw}`;
+    return raw;
+  }, [phone]);
 
-  // mark the flow: 'signup' (default) or 'login'
-  const mode = (params.get('mode') === 'login' ? 'login' : 'signup') as 'login' | 'signup';
-  useEffect(() => {
-    sessionStorage.setItem('bw.auth.mode', mode);
-  }, [mode]);
-
-  // On unmount (or before re-render), reset any existing reCAPTCHA widget
+  // 🔧 reCAPTCHA: cleanup once when this screen unmounts
   useEffect(() => {
     return () => {
-      try { window.grecaptcha?.reset(); } catch {}
+      try { clearRecaptcha(); } catch {}
     };
   }, []);
 
-  async function handleSend() {
-    const local10 = phoneLocal10.replace(/\D/g, '').slice(-10);
-    if (local10.length !== 10 || busy) return;
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
 
-    setBusy(true);
+    if (!/^\+\d{10,15}$/.test(e164)) {
+      setErr('Please enter a valid phone number in E.164 format.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      try { window.grecaptcha?.reset(); } catch {}
-
-      clearPhoneSession();
-      const e164 = '+91' + local10;
-
-      // Guardrails based on agreed UX:
-      // - If SIGNUP + number exists -> tell user and go to Welcome (start with Log in)
-      if (mode === 'signup' && hasUser(e164)) {
-        alert('This mobile number is already registered. Please use Log in.');
-        // ensure we land on Welcome (manual flow) as discussed
-        nav('/', { replace: true });
-        return;
-      }
-      // - If LOGIN + number missing -> tell user and go to Welcome (start signup)
-      if (mode === 'login' && !hasUser(e164)) {
-        alert('We don’t recognize this number. Please Sign up first.');
-        nav('/', { replace: true });
-        return;
-      }
-
-      // otherwise proceed with OTP
-      sessionStorage.setItem('bw.session.phone', e164);
-      await sendOtp(e164);
-      nav('/onboarding/auth/otp', { replace: true });
-    } catch (err) {
-      alert((err as Error).message || 'Could not send OTP. Please try again.');
+      // Always proceed to OTP; existence is determined & upserted after verification on backend
+      ensureRecaptcha();                 // create/reuse invisible widget (idempotent)
+      const result = await sendOtp(e164); // uses the same singleton verifier
+      setConfirmation(result);
+      nav(`/onboarding/auth/otp?mode=${mode}`, { replace: true });
+    } catch (error: any) {
+      console.error(error);
+      setErr(error?.message || 'Failed to send code. Please try again.');
     } finally {
-      setBusy(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <OnboardFrame
-      step="phone"
-      title={mode === 'login' ? 'Log in' : 'Verify your phone'}
-      subtitle="Enter your mobile number"
-      nextLabel="Send OTP"
-      nextDisabled={phoneLocal10.replace(/\D/g, '').length < 10 || busy}
-      onNext={handleSend}
-      backTo="/onboarding"
-    >
-      <input
-        id="phone-input"
-        type="tel"
-        inputMode="numeric"
-        placeholder="10-digit mobile number"
-        className="w-full rounded-xl border px-4 py-2 bg-white"
-        disabled={busy}
-        value={phoneLocal10}
-        onChange={(e) => setPhoneLocal10(e.target.value.replace(/\D/g, '').slice(-10))}
-      />
+    <div className="min-h-dvh grid place-items-center px-4">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-4 shadow-lg animate-fade-up"
+      >
+        <h1 className="text-2xl font-bold">
+          {mode === 'signup' ? 'Create your account' : 'Welcome back'}
+        </h1>
+        <p className="text-sm text-gray-600">
+          Enter your phone to receive a one-time code.
+        </p>
 
-      {/* Hidden container for invisible reCAPTCHA (must exist in DOM) */}
-      <div id="recaptcha-container" className="hidden" />
-    </OnboardFrame>
+        <input
+          type="tel"
+          inputMode="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+91 98765 43210"
+          className="w-full rounded-xl border px-4 py-3 outline-none focus:ring"
+        />
+
+        {err && <p className="text-sm text-red-600">{err}</p>}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-xl py-3 font-semibold bg-black text-white disabled:opacity-50"
+        >
+          {submitting ? 'Sending…' : 'Send code'}
+        </button>
+
+        {/* Host for invisible reCAPTCHA (will be created if missing) */}
+        <div id="recaptcha-container" />
+      </form>
+    </div>
   );
 }

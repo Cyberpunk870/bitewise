@@ -1,6 +1,6 @@
-// src/lib/feed/DummyAdapter.ts
 import { addNotice } from '../notifications';
 import { emit } from '../events';
+import { setLastAvailabilitySync } from '../dataSync';
 
 const DISHES = [
   'Paneer Butter Masala','Masala Dosa','Chicken Biryani','Veg Momos','Margherita Pizza'
@@ -22,6 +22,9 @@ export function startDummyFeed() {
       ].forEach(n => addNotice(n as any));
     }
   } catch {}
+
+  // Immediately set a sync timestamp so UI isn't blank on first render
+  setLastAvailabilitySync(Date.now());
 
   // Occasionally simulate rank drop to show leaderboard badge
   const rankNudge = () => {
@@ -45,6 +48,9 @@ export function startDummyFeed() {
       addNotice({ kind, title: 'Savings recap', body: `This week: ₹${rand(40, 160)} saved.` });
       emit('bw:savings:added', {});
     }
+
+    // mark sync so "Last updated" nudges forward even with dummy data
+    setLastAvailabilitySync(Date.now());
     rankNudge();
     schedule();
   };

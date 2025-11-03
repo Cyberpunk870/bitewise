@@ -1,4 +1,4 @@
-// /src/screens/cart/Cart.tsx
+// src/screens/cart/Cart.tsx
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCart from '../../store/cart';
@@ -15,20 +15,33 @@ type CartRow = {
 
 export default function Cart() {
   const nav = useNavigate();
-  const { items, inc, dec, remove, clear } = useCart();
 
-  // WHY: store may only keep id/qty; we enrich defensively from catalog
+  // cart store API from store/cart.ts
+  const { items, add, dec, remove, clear } = useCart();
+
+  // WHY: store keeps { id,name,qty }. We enrich defensively from catalog.
   const rows = useMemo<CartRow[]>(() => {
-    return items.map(({ id, qty }) => {
-      const dish = DISH_CATALOG.find(d => String(d.id) === String(id));
-      const name = dish?.name ?? '(Unknown item)';
-      const price =
-        typeof dish?.price === 'number' && !Number.isNaN(dish.price)
-          ? dish.price
-          : null;
-      const image = getDishImage(dish?.name ?? null, (dish as any)?.imageUrl ?? null);
+    return items.map(({ id, name, qty }) => {
+      const dish = DISH_CATALOG.find(d => String((d as any).id) === String(id));
+      const resolvedName = dish?.name ?? name ?? '(Unknown item)';
 
-      return { id: String(id), name, price, qty, image };
+      const rawPrice = (dish as any)?.price;
+      const price =
+        typeof rawPrice === 'number' && !Number.isNaN(rawPrice)
+          ? rawPrice
+          : null;
+
+      const imgCandidate =
+        getDishImage(dish?.name ?? resolvedName ?? null, (dish as any)?.imageUrl ?? null) ||
+        '';
+
+      return {
+        id: String(id),
+        name: resolvedName,
+        price,
+        qty,
+        image: imgCandidate,
+      };
     });
   }, [items]);
 
@@ -52,7 +65,10 @@ export default function Cart() {
         ) : (
           <ul className="space-y-4">
             {rows.map(r => (
-              <li key={r.id} className="flex gap-3 items-center border rounded-xl p-3">
+              <li
+                key={r.id}
+                className="flex gap-3 items-center border rounded-xl p-3"
+              >
                 <img
                   src={r.image}
                   alt={r.name}
@@ -78,7 +94,10 @@ export default function Cart() {
                   <div className="w-8 text-center">{r.qty}</div>
                   <button
                     className="px-2 py-1 border rounded"
-                    onClick={() => inc(r.id)}
+                    onClick={() => {
+                      // add() will merge & bump qty in the store
+                      add({ id: r.id, name: r.name, qty: 1 });
+                    }}
                   >
                     +
                   </button>

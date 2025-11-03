@@ -1,79 +1,108 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import OnboardFrame from '../../components/OnboardFrame';
-import useOnboarding from '../../store/onboarding';
-import { confirmPhoneCode, waitForAuthSettle } from '../../lib/firebase';
-import { loadProfileByPhone, saveProfile, setActivePhone, getLastRoute } from '../../lib/profileStore';
-import { decidePerm } from '../../lib/permPrefs';
+// src/screens/onboarding/Otp.tsx
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { confirmPhoneCode } from '../../lib/firebase';
+import { useAuth } from '../../store/auth';
+import { upsertUser, setActivePhone } from '../../lib/profileStore';
+import { emit } from '../../lib/events';
+import { hydrateActiveFromCloud, pushActiveToCloud } from '../../lib/cloudProfile';
 
 export default function Otp() {
   const nav = useNavigate();
-  const { setStep } = useOnboarding();
-  const [busy, setBusy] = useState(false);
+  const [params] = useSearchParams();
+  const mode = (params.get('mode') || 'signup').toLowerCase() as 'signup' | 'login';
+
+  const { phone } = useAuth();
   const [code, setCode] = useState('');
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => setStep('otp'), [setStep]);
+  const [err, setErr] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  async function handleVerify() {
-    const c = code.replace(/\D/g, '').slice(0, 6);
-    if (c.length < 6 || busy) return;
-    setBusy(true);
+  useEffect(() => {
+    // Guard: prevent direct access if phone missing
+    if (!phone) nav('/onboarding/auth/phone', { replace: true });
+  }, [phone, nav]);
+
+  // 🔔 helper to trigger existing toast system
+  function toast(title: string, body: string) {
     try {
-      await confirmPhoneCode(c);
-      await waitForAuthSettle();
-      const phone = sessionStorage.getItem('bw.session.phone') ?? '';
-      const mode = (sessionStorage.getItem('bw.auth.mode') || 'signup') as 'login' | 'signup';
-      const existing = phone ? Boolean(loadProfileByPhone(phone)) : false;
+      window.dispatchEvent(new CustomEvent('bw:toast', { detail: { title, body } }));
+    } catch {}
+  }
 
-      if (phone) setActivePhone(phone);
-      sessionStorage.removeItem('bw.logoutReason');
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
 
-      if (mode === 'login') {
-        const needsPerms =
-          decidePerm('location') === 'ask' ||
-          decidePerm('notifications') === 'ask' ||
-          decidePerm('mic') === 'ask';
-        const last = getLastRoute();
-        nav(needsPerms ? '/onboarding/perm/location' : (last || '/home'), { replace: true });
+    try {
+      if (!/^\d{4,8}$/.test(code)) {
+        setErr('Please enter the 6-digit code.');
         return;
       }
+      setSubmitting(true);
 
-      // signup
-      if (existing && phone) {
-        const last = getLastRoute();
-        nav(last || '/home', { replace: true });
-      } else {
-        saveProfile({ phone, name: 'Guest', addressLine: '' });
-        nav('/onboarding/perm/location', { replace: true });
+      // ✅ verify with Firebase
+      const user = await confirmPhoneCode(code);
+      const phoneE164 = user.phoneNumber || phone;
+
+      // ✅ create/update local profile + mark active
+      if (phoneE164) {
+        upsertUser({ phone: phoneE164, name: '' });
+        setActivePhone(phoneE164);
       }
-    } catch (err) {
-      alert('Could not verify code. Please try again.');
+
+      // 🔄 notify the rest of app (AppShell, etc.)
+      emit('bw:otp:verified', { phone: phoneE164 });
+      emit('bw:auth:changed', null);
+
+      await hydrateActiveFromCloud().catch(() => {});
+      await pushActiveToCloud().catch(() => {});
+
+      // ✅ route next based on mode
+      if (mode === 'signup') {
+        toast('Phone verified', 'Let’s set up your profile.');
+        nav('/onboarding/name', { replace: true });
+      } else {
+        toast('Welcome back', 'You are now signed in.');
+        nav('/home', { replace: true });
+      }
+    } catch (error: any) {
+      console.error(error);
+      setErr(error?.message || 'Invalid code. Please try again.');
     } finally {
-      setBusy(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <OnboardFrame
-      step="otp"
-      title="Verify the code"
-      subtitle="Enter the 6-digit code sent to your phone."
-      nextLabel="Verify"
-      nextDisabled={code.replace(/\D/g, '').length < 6 || busy}
-      onNext={handleVerify}
-      backTo="/onboarding/auth/phone"
-    >
-      <input
-        ref={inputRef}
-        id="otp-input"
-        type="tel"
-        inputMode="numeric"
-        placeholder="Enter 6-digit code"
-        className="w-full rounded-xl border px-4 py-2 bg-white"
-        disabled={busy}
-        value={code}
-        onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-      />
-    </OnboardFrame>
+    <div className="min-h-dvh grid place-items-center px-4">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-4 shadow-lg animate-fade-up"
+      >
+        <h1 className="text-2xl font-bold">Enter the code</h1>
+        <p className="text-sm text-gray-600">
+          We sent an SMS to {phone || 'your number'}.
+        </p>
+
+        <input
+          type="tel"
+          inputMode="numeric"
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, ''))}
+          placeholder="6-digit code"
+          className="w-full rounded-xl border px-4 py-3 tracking-widest text-center text-lg outline-none focus:ring"
+        />
+
+        {err && <p className="text-sm text-red-600">{err}</p>}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-xl py-3 font-semibold bg-black text-white disabled:opacity-50"
+        >
+          {submitting ? 'Verifying…' : 'Verify'}
+        </button>
+      </form>
+    </div>
   );
 }

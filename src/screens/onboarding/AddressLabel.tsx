@@ -1,81 +1,131 @@
 // src/screens/onboarding/AddressLabel.tsx
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import OnboardFrame from '../../components/OnboardFrame';
 import useOnboarding from '../../store/onboarding';
+import { setActiveProfileFields } from '../../lib/profileStore';
+import { pushActiveToCloud } from '../../lib/cloudProfile';
+import { getAuth } from 'firebase/auth';                // still fine to keep
+import { addAddress as apiAddAddress } from '../../lib/api'; // NOTE: new shape (no uid arg)
 
-import useAddress from '../../store/address';
-import type { AddressLabel as AddressLabelType } from '../../store/address';
-
-const OPTIONS: AddressLabelType[] = ['Home', 'Work', 'Gym', 'Friend'];
+const LABEL_SUGGESTIONS = ['Home', 'Work', 'PG', 'Parents', 'Friend', 'Gym', 'Other'];
 
 export default function AddressLabel() {
   const nav = useNavigate();
-  const { setStep } = useOnboarding();
-  const { addressLine, setLabel } = useAddress();
+  const ob: any = useOnboarding();
 
-  // Start blank; user must pick
-  const [choice, setChoice] = useState<AddressLabelType | 'other' | ''>('');
-  const [custom, setCustom] = useState('');
+  // Optional store step handling
+  useEffect(() => {
+    try {
+      ob?.setStep?.('addressLabel');
+    } catch {}
+  }, [ob]);
 
-  useEffect(() => setStep('addressLabel'), [setStep]);
+  // Read existing values from onboarding store (fallbacks are safe)
+  const addressLine = ob?.addressLine || '';
+  const lat = ob?.lat ?? null;
+  const lng = ob?.lng ?? null;
+  const currentLabel = ob?.addressLabel || '';
 
-  const canNext =
-    choice === 'other' ? custom.trim().length > 0 : choice !== '';
+  // Dropdown + optional custom label
+  const [selected, setSelected] = useState(() => {
+    const hit = LABEL_SUGGESTIONS.find(
+      (s) => s.toLowerCase() === (currentLabel || '').toLowerCase()
+    );
+    return hit || 'Other';
+  });
 
-  function handleNext() {
-    if (!canNext) return;
-    const value =
-      choice === 'other'
-        ? ({ custom: custom.trim() } as const)
-        : (choice as AddressLabelType);
+  const [customLabel, setCustomLabel] = useState(
+    LABEL_SUGGESTIONS.includes(currentLabel) ? '' : currentLabel
+  );
 
-    setLabel(value);
-    nav('/onboarding/auth/phone', { replace: true });
+  const effectiveLabel = selected === 'Other' ? customLabel.trim() : selected;
+
+  const canProceed = !!(addressLine && effectiveLabel && lat && lng);
+
+  async function handleContinue() {
+    if (!canProceed) return;
+
+    // 1. update onboarding store + local active profile
+    try {
+      ob?.setAddressLabel?.(effectiveLabel);
+    } catch {}
+
+    setActiveProfileFields({
+      addressLine,
+      addressLabel: effectiveLabel,
+      lat,
+      lng,
+    });
+
+    // 2. push profile snapshot up (best-effort, non-blocking)
+    try {
+      await pushActiveToCloud();
+    } catch (err) {
+      console.warn('Cloud sync deferred', err);
+    }
+
+    // 3. NEW: also persist this address in backend (which writes Firestore)
+    // backend will read uid from the bearer token, we do NOT pass uid here
+    try {
+      const uid = getAuth().currentUser?.uid;
+      if (uid) {
+        await apiAddAddress({
+          label: effectiveLabel,
+          addressLine,
+          lat,
+          lng,
+          active: true, // first onboarding address → make active by default
+        });
+        console.log('✅ Address upserted for onboarding user');
+      } else {
+        console.warn('⚠️ Skipped Firestore upsert: no Firebase user');
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to upsert onboarding address:', err);
+    }
+
+    // 4. continue onboarding flow
+    nav('/onboarding/perm/location', { replace: true });
   }
 
   return (
     <OnboardFrame
       step="addressLabel"
       backTo="/onboarding/address/pick"
-      title="Save address as"
-      subtitle={addressLine || 'No address set.'}
-      nextLabel="Next"
-      nextDisabled={!canNext}
-      onNext={handleNext}
+      title="Label this address"
+      subtitle="Pick a label or enter a custom one."
+      nextLabel="Continue"
+      nextDisabled={!canProceed}
+      onNext={handleContinue}
     >
-      <div className="space-y-3">
-        <label className="block text-sm">Label</label>
+      <div className="w-full max-w-md mx-auto space-y-4">
+        <label className="block text-sm font-medium mb-1">Choose a label</label>
+        <select
+          className="w-full rounded-xl border px-4 py-2 bg-white"
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+        >
+          {LABEL_SUGGESTIONS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
 
-        <div className="relative">
-          <select
-            className="w-full appearance-none rounded-xl border bg-white/90 px-4 py-2"
-            value={choice}
-            onChange={(e) =>
-              setChoice(e.target.value as AddressLabelType | 'other' | '')
-            }
-          >
-            <option value="">Choose…</option>
-            {OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-            <option value="other">Other</option>
-          </select>
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-            ▾
-          </span>
-        </div>
-
-        {choice === 'other' && (
+        {selected === 'Other' && (
           <input
-            className="w-full rounded-xl border px-4 py-2"
-            placeholder="Custom label (e.g., Parents)"
-            value={custom}
-            onChange={(e) => setCustom(e.target.value)}
+            type="text"
+            className="w-full rounded-xl border px-4 py-2 bg-white"
+            placeholder="Type custom label (e.g. 'Hostel B-203')"
+            value={customLabel}
+            onChange={(e) => setCustomLabel(e.target.value)}
           />
         )}
+
+        <p className="text-xs opacity-70">
+          This helps you quickly identify and switch between saved locations.
+        </p>
       </div>
     </OnboardFrame>
   );

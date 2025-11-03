@@ -1,120 +1,277 @@
 // src/screens/leaderboard/Leaderboard.tsx
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
-type Scope = 'local' | 'global' | 'friends';
-type Frame = 'today' | 'week' | 'month' | 'all';
-type Row = { name: string; you?: boolean; tokens: number; compares: number; savings: number };
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { getAuth } from "firebase/auth";
+import { getLeaderboard, getUserProfile } from "../../lib/api";
 
-function currentUser(): Row {
-  const tokens = Number(localStorage.getItem('bw.tokens') || '0');
-  const compares = Number(localStorage.getItem('bw.stats.compares') || '0');
-  const savings = Number(localStorage.getItem('bw.stats.savings') || '0');
-  const name = localStorage.getItem('bw.profile.name') || 'You';
-  return { name, you: true, tokens, compares, savings };
-}
+type Frame = "week" | "month" | "all";
 
-// seeding helpers
-function seedOthers(scope: Scope, frame: Frame): Row[] {
-  const base = scope === 'local' ? 1200 : 1800;
-  const mul = frame === 'today' ? 0.05 : frame === 'week' ? 0.25 : frame === 'month' ? 0.8 : 1;
-  const n = 9;
-  return Array.from({ length: n }).map((_, i) => ({
-    name: `${scope === 'friends' ? 'Friend' : 'User'} ${i + 1}`,
-    tokens: Math.max(0, Math.round((base - i * 120) * mul)),
-    compares: Math.round((30 - i * 2) * mul),
-    savings: Math.max(0, Math.round((5000 - i * 300) * mul)),
-  }));
-}
+type LeaderboardEntry = {
+  uid: string;
+  name: string;
+  coins: number;
+  savingsThisFrame: number; // rupees saved in the frame (week for now)
+  isYou: boolean;
+};
 
 function Medal({ rank }: { rank: number }) {
-  const color = rank === 1 ? 'bg-yellow-400' : rank === 2 ? 'bg-gray-300' : 'bg-amber-700';
-  return <span className={`inline-block w-3 h-3 rounded-full ${color}`} aria-hidden />;
+  const className =
+    rank === 1
+      ? "bg-yellow-400"
+      : rank === 2
+      ? "bg-gray-300"
+      : "bg-amber-700";
+  return (
+    <span
+      className={`inline-block w-3 h-3 rounded-full ${className}`}
+      aria-hidden
+    />
+  );
 }
 
 export default function Leaderboard() {
   const nav = useNavigate();
-  const [scope, setScope] = useState<Scope>('local');
-  const [frame, setFrame] = useState<Frame>('month');
 
-  // contacts picker
-  const [friendsSeed, setFriendsSeed] = useState<Row[] | null>(null);
-  async function pickContacts() {
-    // Web Contacts (secure contexts only, limited browsers). Fallback: explain to user.
-    const anyNav: any = navigator as any;
-    if (anyNav?.contacts?.select) {
-      try {
-        const props = ['name', 'tel'];
-        const opts = { multiple: true };
-        const contacts = await anyNav.contacts.select(props, opts);
-        // lightweight fake: turn contacts into seeded rows
-        const rows: Row[] = (contacts || []).slice(0, 10).map((c: any, i: number) => ({
-          name: (c.name?.[0] || c.name || `Friend ${i + 1}`),
-          tokens: 400 + Math.round(Math.random() * 600),
-          compares: 2 + Math.round(Math.random() * 30),
-          savings: 200 + Math.round(Math.random() * 2500),
-        }));
-        setFriendsSeed(rows);
-      } catch (e) {
-        alert('Could not access contacts. You can try again or use default friends.');
+  const [frame, setFrame] = useState<Frame>("week"); // default "This Week"
+  const [loading, setLoading] = useState<boolean>(true);
+  const [rows, setRows] = useState<LeaderboardEntry[]>([]);
+  const [myRank, setMyRank] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string>("");
+
+  // helper: load data for "This Week"
+  async function loadWeek() {
+    setLoading(true);
+    setErrorMsg("");
+
+    try {
+      // 1. who am I? (from Firebase + /api/users/profile)
+      const auth = getAuth();
+      const uid = auth.currentUser?.uid || "guest";
+
+      // server already knows who you are via bearer token
+      const meProfileResp = await getUserProfile();
+      // meProfileResp.profile = { name?, total_coins?, ... }
+      const myName =
+        (meProfileResp?.profile?.name as string | undefined) || "You";
+      const myCoins = Number(meProfileResp?.profile?.total_coins || 0);
+
+      // 2. leaderboard rows from backend (current week)
+      //    backend returns something like:
+      //    { ok: true, region: "global", data: [ { user_id, score }, ... ] }
+      const lbResp = await getLeaderboard();
+      const rawList: any[] = Array.isArray(lbResp?.data)
+        ? lbResp.data
+        : [];
+
+      // 3. hydrate each row
+      //    We USED TO do N extra getUserProfile(rowUid) calls,
+      //    but now getUserProfile() takes no args (server uses bearer token).
+      //    We'll skip per-row name lookup for OTHER users.
+      //    We'll infer:
+      //      - if it's you  -> use your name + coins
+      //      - otherwise    -> fallback to "User" or short uid, coins = 0
+      const hydrated: LeaderboardEntry[] = [];
+      for (const item of rawList) {
+        const rowUid = String(item.user_id || "");
+        const rowScore = Number(item.score || 0); // "₹ saved this week"
+
+        let rowName = "User";
+        let rowCoins = 0;
+        const isYou = rowUid === uid;
+
+        if (isYou) {
+          rowName = myName;
+          rowCoins = myCoins;
+        } else {
+          // fallback display for others:
+          // show short uid for a tiny bit more personality
+          const shortUid = rowUid ? rowUid.slice(0, 6) : "user";
+          rowName = `User ${shortUid}`;
+          rowCoins = 0;
+        }
+
+        hydrated.push({
+          uid: rowUid,
+          name: rowName,
+          coins: rowCoins,
+          savingsThisFrame: rowScore,
+          isYou,
+        });
       }
-    } else {
-      alert('Your browser does not support Contacts Picker. We will show a sample friends board for now.');
-      setFriendsSeed(seedOthers('friends', frame));
+
+      // 4. ensure "you" appear even if not top N
+      const alreadyHasMe = hydrated.some((r) => r.isYou);
+      if (!alreadyHasMe) {
+        hydrated.push({
+          uid,
+          name: myName,
+          coins: myCoins,
+          savingsThisFrame: 0,
+          isYou: true,
+        });
+      }
+
+      // 5. sort by savings desc, then coins desc
+      hydrated.sort(
+        (a, b) =>
+          b.savingsThisFrame - a.savingsThisFrame ||
+          b.coins - a.coins
+      );
+
+      // 6. compute my rank
+      const idx = hydrated.findIndex((r) => r.isYou);
+      setMyRank(idx >= 0 ? idx + 1 : null);
+      setRows(hydrated);
+    } catch (err: any) {
+      console.error("Leaderboard load failed", err);
+      setErrorMsg(
+        err?.message || "Could not load leaderboard."
+      );
+      setRows([]);
+      setMyRank(null);
+    } finally {
+      setLoading(false);
     }
   }
 
-  // sticky choices
+  // whenever frame changes, load appropriate data
   useEffect(() => {
-    const s = (localStorage.getItem('bw.lb.scope') as Scope) || 'local';
-    const f = (localStorage.getItem('bw.lb.frame') as Frame) || 'month';
-    setScope(s); setFrame(f);
-  }, []);
-  useEffect(() => { localStorage.setItem('bw.lb.scope', scope); }, [scope]);
-  useEffect(() => { localStorage.setItem('bw.lb.frame', frame); }, [frame]);
+    if (frame === "week") {
+      loadWeek();
+    } else {
+      // month / all not wired yet -> just show placeholder
+      setRows([]);
+      setMyRank(null);
+      setLoading(false);
+      setErrorMsg("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame]);
 
-  const rows = useMemo(() => {
-    const me = currentUser();
-    const base = scope === 'friends' ? (friendsSeed || seedOthers('friends', frame)) : seedOthers(scope, frame);
-    return [me, ...base].sort((a, b) => (b.tokens - a.tokens) || (b.savings - a.savings));
-  }, [scope, frame, friendsSeed]);
-  const myRank = rows.findIndex(r => r.you) + 1;
+  // friendly label for frame UI
+  const frameLabel = (f: Frame) =>
+    f === "week"
+      ? "This Week"
+      : f === "month"
+      ? "This Month"
+      : "All Time";
+
+  // table body (memo mainly for cleanliness)
+  const tableBody = useMemo(() => {
+    if (loading) {
+      return (
+        <tr className="border-t">
+          <td
+            colSpan={4}
+            className="py-6 text-center text-sm text-gray-500"
+          >
+            Loading…
+          </td>
+        </tr>
+      );
+    }
+
+    if (frame !== "week") {
+      // future frames
+      return (
+        <tr className="border-t">
+          <td
+            colSpan={4}
+            className="py-6 text-center text-sm text-gray-500"
+          >
+            Coming soon
+          </td>
+        </tr>
+      );
+    }
+
+    if (errorMsg) {
+      return (
+        <tr className="border-t">
+          <td
+            colSpan={4}
+            className="py-6 text-center text-sm text-red-600"
+          >
+            {errorMsg}
+          </td>
+        </tr>
+      );
+    }
+
+    if (!rows.length) {
+      return (
+        <tr className="border-t">
+          <td
+            colSpan={4}
+            className="py-6 text-center text-sm text-gray-500"
+          >
+            No savers yet. Be the first this week 👑
+          </td>
+        </tr>
+      );
+    }
+
+    return rows.map((r, i) => (
+      <tr
+        key={r.uid + "-" + i}
+        className={`border-t ${r.isYou ? "bg-yellow-50" : ""}`}
+      >
+        <td className="py-2 px-3">
+          {i < 3 ? <Medal rank={i + 1} /> : i + 1}
+        </td>
+        <td className="py-2 px-3">
+          {r.name}
+          {r.isYou ? " (you)" : ""}
+        </td>
+        <td className="py-2 px-3">
+          {r.coins.toLocaleString("en-IN")}
+        </td>
+        <td className="py-2 px-3">
+          ₹{r.savingsThisFrame.toFixed(0)}
+        </td>
+      </tr>
+    ));
+  }, [rows, loading, frame, errorMsg]);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400">
       <div className="max-w-3xl mx-auto px-4 py-6">
+        {/* header */}
         <header className="flex items-center justify-between mb-4">
-          <button className="px-3 py-1.5 text-sm rounded-full border bg-white/80" onClick={() => nav(-1)}>← Back</button>
-          <h1 className="text-lg font-semibold text-white drop-shadow">Leaderboard</h1>
+          <button
+            className="px-3 py-1.5 text-sm rounded-full border bg-white/80"
+            onClick={() => nav(-1)}
+          >
+            ← Back
+          </button>
+          <h1 className="text-lg font-semibold text-white drop-shadow">
+            Leaderboard
+          </h1>
           <div className="w-16" />
         </header>
 
-        {/* scope + timeframe */}
+        {/* timeframe selector + rank pill */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          {(['local','global','friends'] as Scope[]).map(s => (
-            <button key={s} onClick={() => setScope(s)}
-              className={`px-3 py-1.5 rounded-full text-sm border ${scope===s?'bg-black text-white border-black':'bg-white/80'}`}>
-              {s === 'local' ? 'Local' : s === 'global' ? 'Global' : 'Friends'}
+          {(["week", "month", "all"] as Frame[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFrame(f)}
+              className={`px-3 py-1.5 rounded-full text-sm border ${
+                frame === f
+                  ? "bg-black text-white border-black"
+                  : "bg-white/80"
+              }`}
+            >
+              {frameLabel(f)}
             </button>
           ))}
-          <span className="mx-2 opacity-60">•</span>
-          {(['today','week','month','all'] as Frame[]).map(f => (
-            <button key={f} onClick={() => setFrame(f)}
-              className={`px-3 py-1.5 rounded-full text-sm border ${frame===f?'bg-black text-white border-black':'bg-white/80'}`}>
-              {f === 'today' ? 'Today' : f === 'week' ? 'This Week' : f === 'month' ? 'This Month' : 'All Time'}
-            </button>
-          ))}
-          <div className="ml-auto text-white/90 text-sm">Your rank: <b>#{myRank}</b></div>
-        </div>
 
-        {scope === 'friends' && (
-          <div className="mb-3">
-            <button onClick={pickContacts} className="px-3 py-1.5 rounded-full bg-white/90 border text-sm">
-              {friendsSeed ? 'Refresh friends' : 'Connect contacts'}
-            </button>
-            <span className="text-xs text-white/90 ml-2">We only read names/numbers locally to build your friends board.</span>
+          <div className="ml-auto text-white/90 text-sm">
+            Your rank:{" "}
+            <b>{myRank !== null ? `#${myRank}` : "—"}</b>
           </div>
-        )}
+        </div>
 
         {/* table */}
         <div className="rounded-xl overflow-hidden bg-white shadow">
@@ -124,30 +281,16 @@ export default function Leaderboard() {
                 <th className="py-2 px-3">Rank</th>
                 <th className="py-2 px-3">User</th>
                 <th className="py-2 px-3">Tokens</th>
-                <th className="py-2 px-3">Compares</th>
                 <th className="py-2 px-3">Savings (₹)</th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.name + i} className={`border-t ${r.you ? 'bg-yellow-50' : ''}`}>
-                  <td className="py-2 px-3">
-                    {i < 3 ? <Medal rank={i+1} /> : i+1}
-                  </td>
-                  <td className="py-2 px-3">
-                    {r.name}{r.you ? ' (you)' : ''}
-                  </td>
-                  <td className="py-2 px-3">{r.tokens}</td>
-                  <td className="py-2 px-3">{r.compares}</td>
-                  <td className="py-2 px-3">{r.savings.toFixed(0)}</td>
-                </tr>
-              ))}
-            </tbody>
+            <tbody>{tableBody}</tbody>
           </table>
         </div>
 
         <p className="text-xs text-white/90 mt-3">
-          Friends uses your device contacts (when supported). All data stays on-device for the MVP.
+          Savings = money you kept in your pocket by ordering on
+          the cheaper platform.
         </p>
       </div>
     </main>

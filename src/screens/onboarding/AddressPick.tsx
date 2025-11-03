@@ -1,14 +1,19 @@
-/// src/screens/onboarding/AddressPick.tsx
+// src/screens/onboarding/AddressPick.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import OnboardFrame from '../../components/OnboardFrame';
 import useOnboarding from '../../store/onboarding';
 import { loadGoogleMaps } from '../../lib/googleMaps';
+import { setActiveProfileFields } from '../../lib/profileStore';
+import { pushActiveToCloud } from '../../lib/cloudProfile';
+import { getAuth } from 'firebase/auth';                    // ✅ NEW
+import { addAddress as apiAddAddress } from '../../lib/api'; // ✅ NEW
 
 type Coords = { lat: number; lng: number };
 
 export default function AddressPick() {
   const nav = useNavigate();
+  const location = useLocation();
   const {
     addressLine: storedLine,
     lat: storedLat,
@@ -17,7 +22,13 @@ export default function AddressPick() {
     setStep,
   } = useOnboarding();
 
-  // ✅ read pre-seeded live address (from Home “Use current”)
+  // Detect if this address-pick is a “lite” update (from Settings or live updater)
+  const params = new URLSearchParams(location.search);
+  const fromSettings = params.get('from') === 'settings';
+  const fromLiveUpdate = !!sessionStorage.getItem('bw.pending.liveAddress');
+  const isLiteAddressUpdate = fromSettings || fromLiveUpdate;
+
+  // Seed from pending live address if present
   let seedLine = storedLine ?? '';
   let seedCoords: Coords | null =
     typeof storedLat === 'number' && typeof storedLng === 'number'
@@ -37,12 +48,10 @@ export default function AddressPick() {
     }
   } catch {}
 
-  // Input + coords (seed)
   const [input, setInput] = useState(seedLine);
   const [coords, setCoords] = useState<Coords | null>(seedCoords);
   const [busy, setBusy] = useState(false);
 
-  // progress
   useEffect(() => {
     setStep('addressPick');
   }, [setStep]);
@@ -50,13 +59,10 @@ export default function AddressPick() {
   // Google refs
   const mapEl = useRef<HTMLDivElement | null>(null);
   const inputEl = useRef<HTMLInputElement | null>(null);
-
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-
-  // readiness + queued action
   const mapReady = useRef(false);
   const pendingLoc = useRef<null | (() => void)>(null);
 
@@ -78,7 +84,6 @@ export default function AddressPick() {
       const marker = markerRef.current;
       if (map) map.panTo(p);
       if (marker) marker.setPosition(p);
-
       if (doReverse) {
         setBusy(true);
         const line = (await reverseGeocode(p)) ?? '';
@@ -151,7 +156,6 @@ export default function AddressPick() {
         run();
       }
 
-      // seed existing coords
       if (coords) movePin(coords, false);
     })();
 
@@ -174,7 +178,6 @@ export default function AddressPick() {
   // SINGLE-CLICK “Use my location”
   const useMyLocation = useCallback(() => {
     if (busy) return;
-
     const run = () => {
       setBusy(true);
       navigator.geolocation.getCurrentPosition(
@@ -190,7 +193,6 @@ export default function AddressPick() {
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     };
-
     if (!mapReady.current) {
       pendingLoc.current = run;
       return;
@@ -203,13 +205,43 @@ export default function AddressPick() {
     typeof coords?.lat === 'number' &&
     typeof coords?.lng === 'number';
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!canConfirm || !coords) return;
+
+    // Save into onboarding state
     setGeocode({ addressLine: input.trim(), lat: coords.lat, lng: coords.lng });
 
-    // clear pending live cache (we used it)
+    // Reflect into local active profile (so UI updates immediately)
+    setActiveProfileFields({
+      addressLine: input.trim(),
+      lat: coords.lat,
+      lng: coords.lng,
+    });
+
+    // Debounced cloud push (this only upserts name/phone — addresses remain in saved_addresses)
+    await pushActiveToCloud();
+
     try { sessionStorage.removeItem('bw.pending.liveAddress'); } catch {}
 
+    // ✅ If this was a “lite” update (from Settings/live), also persist to backend now
+    if (isLiteAddressUpdate) {
+      try {
+        const uid = getAuth().currentUser?.uid;
+        if (uid) {
+          await apiAddAddress({
+            label: 'Home',               // safe default when skipping label step
+            addressLine: input.trim(),
+            lat: coords.lat,
+            lng: coords.lng,
+            active: true,                // make this the active one
+          });
+        }
+      } catch {} // non-blocking
+      nav('/home', { replace: true });
+      return;
+    }
+
+    // Otherwise continue to the label step
     nav('/onboarding/address/label', { replace: true });
   };
 
@@ -232,7 +264,6 @@ export default function AddressPick() {
           onChange={(e) => setInput(e.target.value)}
           autoComplete="off"
         />
-
         <button
           type="button"
           onClick={useMyLocation}
@@ -241,7 +272,6 @@ export default function AddressPick() {
         >
           {busy ? 'Finding your location…' : 'Use my location'}
         </button>
-
         <div ref={mapEl} className="h-72 w-full rounded-xl bg-white/50" />
       </div>
     </OnboardFrame>

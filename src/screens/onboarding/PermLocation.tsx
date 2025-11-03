@@ -1,85 +1,135 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import OnboardFrame from '../../components/OnboardFrame';
-import useOnboarding from '../../store/onboarding';
-import { setPermPolicy, type PermPolicy, decidePerm } from '../../lib/permPrefs';
-
-type Choice = PermPolicy | null;
+// src/screens/onboarding/PermLocation.tsx
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { gateLocation } from '../../lib/permGate';
+import {
+  decidePerm,
+  setPermPolicy,
+  allowForThisSession,
+  type PermDecision,
+} from '../../lib/permPrefs';
+import { getCurrentPosition } from '../../lib/location';
+import { emit } from '../../lib/events';
 
 export default function PermLocation() {
   const nav = useNavigate();
-  const { setStep, setPerm } = useOnboarding();
-  const [choice, setChoice] = useState<Choice>(null);
-
-  useEffect(() => setStep('permLocation'), [setStep]);
-
-  // If this permission has already been decided (always/never or an active session flag),
-  // skip this screen immediately.
+  const loc = useLocation();
+  const prenudged = sessionStorage.getItem('bw.perm.prenudge') === '1';
   useEffect(() => {
-    if (decidePerm('location') !== 'ask') {
-      goNext(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  try { sessionStorage.removeItem('bw.perm.prenudge'); } catch {}
+  }, []);
+  const [dec, setDec] = useState<PermDecision>(() => decidePerm('location'));
+  const [busy, setBusy] = useState(false);
+
+  // Treat only explicit "unsupported" as unsupported
+  const unsupported = useMemo(() => {
+    const g = gateLocation();
+    return !g.ok && g.reason === 'unsupported';
   }, []);
 
-  const canNext = choice != null;
+  // Helpful debug
+  console.log('[Perm/Location] gate =', gateLocation());
 
-  async function goNext(skipSelf = false) {
-    if (!skipSelf) {
-      // Persist choice (session vs persistent) and reflect in onboarding store.
-      setPermPolicy('location', choice as PermPolicy);
-      setPerm('location', choice === 'never' ? 'denied' : 'granted');
-
-      // (Optional) If they picked an allow-ish option, you can nudge the browser now.
-      // This is safe on https and on localhost.
-      if (choice !== 'never' && 'geolocation' in navigator) {
-        try {
-          await new Promise<void>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(
-              () => resolve(),
-              () => resolve() // ignore errors; we'll respect policy via decidePerm elsewhere
-            );
-          });
-        } catch {}
-      }
+  // If already allowed (Always or Session), skip forward
+  useEffect(() => {
+    if (dec === 'allow') {
+      setTimeout(() => nav('/onboarding/perm/notifications', { replace: true }), 0);
     }
+  }, [dec, nav]);
 
-    // Continue to Notifications step (it will also auto-skip if already decided).
+  // Auto-nudge the native prompt when arriving from unlock/resume
+  useEffect(() => {
+    const from = new URLSearchParams(loc.search).get('from');
+    if (from && dec === 'ask' && !unsupported && !prenudged) {
+      const id = setTimeout(() => nudgeNativePrompt().catch(() => {}), 250);
+      return () => clearTimeout(id);
+    }
+  }, [loc.search, dec, unsupported]);
+
+  async function nudgeNativePrompt() {
+    try {
+      await getCurrentPosition(5000); // triggers browser sheet; ignore errors
+      allowForThisSession('location'); // harmless if denied
+      emit('bw:perm:changed', null);
+      setDec(decidePerm('location'));
+    } catch {
+      // user may have denied/cancelled
+    }
+  }
+
+  async function chooseAlways() {
+    setBusy(true);
+    try {
+      setPermPolicy('location', 'always');
+      await nudgeNativePrompt();
+      emit('bw:perm:changed', null);
+      setDec(decidePerm('location'));
+      nav('/onboarding/perm/notifications', { replace: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function chooseSession() {
+    setBusy(true);
+    try {
+      allowForThisSession('location');
+      await nudgeNativePrompt();
+      emit('bw:perm:changed', null);
+      setDec(decidePerm('location'));
+      nav('/onboarding/perm/notifications', { replace: true });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function chooseNever() {
+    setPermPolicy('location', 'never');
+    emit('bw:perm:changed', null);
+    setDec(decidePerm('location'));
     nav('/onboarding/perm/notifications', { replace: true });
   }
 
   return (
-    <OnboardFrame
-      step="permLocation"
-      backTo="/onboarding/auth/phone"
-      title="Location"
-      subtitle="Allow to show nearby options & delivery distance."
-      nextLabel="Next"
-      nextDisabled={!canNext}
-      onNext={() => goNext(false)}
-    >
-      <div className="space-y-3">
-        {(['never', 'session', 'always'] as PermPolicy[]).map(opt => {
-          const selected = choice === opt;
-          return (
-            <button
-              key={opt}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => setChoice(opt)}
-              className={`w-full rounded-xl border px-4 py-3 transition ${
-                selected ? 'bg-black text-white' : 'bg-transparent hover:bg-white/10'
-              }`}
-            >
-              {opt === 'never'
-                ? "Don't allow"
-                : opt === 'session'
-                ? 'Only this time'
-                : 'Allow while using the app'}
-            </button>
-          );
-        })}
+    <div className="min-h-dvh grid place-items-center px-4">
+      <div className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-5 shadow-lg animate-fade-up">
+        <h1 className="text-2xl font-bold">Allow Location</h1>
+        <p className="text-sm text-gray-600">
+          We use your location to find nearby restaurants and accurate delivery estimates.
+        </p>
+
+        {unsupported && (
+          <div className="rounded-xl border p-3 text-sm">
+            Your browser doesn’t support geolocation. You can continue without it.
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <button
+            onClick={chooseAlways}
+            disabled={busy || unsupported}
+            className="w-full rounded-xl bg-black text-white py-3 disabled:opacity-50"
+          >
+            Always allow
+          </button>
+          <button
+            onClick={chooseSession}
+            disabled={busy || unsupported}
+            className="w-full rounded-xl border py-3 disabled:opacity-50"
+          >
+            Only this time
+          </button>
+          <button
+            onClick={chooseNever}
+            disabled={busy}
+            className="w-full rounded-xl border py-3"
+          >
+            Don’t allow
+          </button>
+        </div>
+
+        <p className="text-xs text-gray-500">You can change this later in Settings.</p>
       </div>
-    </OnboardFrame>
+    </div>
   );
 }

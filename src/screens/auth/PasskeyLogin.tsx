@@ -1,9 +1,8 @@
 // src/screens/auth/PasskeyLogin.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { clearSessionPerms } from '../../lib/permPrefs';
+import { clearSessionPerms, decidePerm } from '../../lib/permPrefs';
 import { emit } from '../../lib/events';
-import { decidePerm } from '../../lib/permPrefs';
 
 const LAST_ROUTE_KEY = 'bw.lastRoute';
 
@@ -12,14 +11,6 @@ export default function PasskeyLogin() {
   const [params] = useSearchParams();
   const reason = useMemo(() => params.get('reason') || '', [params]);
   const [code, setCode] = useState('');
-
-  useEffect(() => {
-    if (reason === 'idle') {
-      try { clearSessionPerms(); } catch {}
-      try { sessionStorage.setItem('bw.requirePermRecheck', '1'); } catch {}
-      try { emit('bw:perm:changed', null); } catch {}
-    }
-  }, [reason]);
 
   const lastRoute = () => {
     try { return sessionStorage.getItem(LAST_ROUTE_KEY) || '/home'; } catch { return '/home'; }
@@ -38,37 +29,19 @@ export default function PasskeyLogin() {
     const pin = (code || '').trim();
     if (pin.length < 4 || pin.length > 6) return;
 
-    // Force re-prompts after this unlock (for all “Only this time” perms)
-    try { clearSessionPerms(); } catch {}
-    try { sessionStorage.setItem('bw.requirePermRecheck', '1'); } catch {}
-    try { sessionStorage.setItem('bw.justUnlocked', '1'); } catch {}
-
     markAuthed();
 
-    // 🔹 Optional: trigger permission-step recheck for "Only this time" policies
-setTimeout(() => {
-  try {
-    if (decidePerm('location') === 'ask') {
-      nav('/onboarding/perm/location', { replace: true });
-    } else if (decidePerm('notifications') === 'ask') {
-      nav('/onboarding/perm/notifications', { replace: true });
-    } else if (decidePerm('mic') === 'ask') {
-      nav('/onboarding/perm/mic', { replace: true });
-    }
-  } catch {}
-}, 0);
-
-    const target = lastRoute();
-    nav(target, { replace: true });
-
-    // Kick the recheck loop as soon as we land
-    setTimeout(() => { try { emit('bw:perm:recheck', null); } catch {} }, 0);
+      // Otherwise land on the last route
+      nav(lastRoute(), { replace: true });
+      // Ensure AppShell rechecks (it also double-nudges)
+      setTimeout(() => { try { emit('bw:auth:changed', null); } catch {} }, 0);
+    
   }
 
   function goOtp() {
     const redirect = lastRoute();
     try { sessionStorage.setItem('bw.auth.redirect', redirect); } catch {}
-    nav(`/auth/phone?redirect=${encodeURIComponent(redirect)}`, { replace: true });
+    nav(`/onboarding/auth/phone?mode=login`, { replace: true });
   }
 
   return (
@@ -91,10 +64,7 @@ setTimeout(() => {
         />
         <div className="flex items-center gap-2">
           <button className="px-4 py-2 rounded-xl bg-black text-white" onClick={unlock}>Unlock</button>
-          <button className="px-3 py-2 rounded-xl border" onClick={() => nav('/onboarding/auth/phone?mode=login', {replace: true })}
-         >
-         Use OTP instead
-         </button>
+          <button className="px-3 py-2 rounded-xl border" onClick={goOtp}>Use OTP instead</button>
         </div>
       </div>
     </main>

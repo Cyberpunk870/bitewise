@@ -1,40 +1,61 @@
 // src/lib/permGate.ts
-import { decidePerm, getPermPolicy } from './permPrefs';
+import { decidePerm } from './permPrefs';
 
-export type Gate =
-  | { ok: true }
-  | { ok: false; reason: 'ask' | 'denied' | 'unsupported' };
+export type Gate = { ok: boolean; reason?: string };
 
-export function canUse(what: 'location'|'mic'|'notifications'): boolean {
-  const d = decidePerm(what); // 'allow' | 'deny' | 'ask'
-  return d === 'allow' || d === 'ask' ? true : false; // UI can *try* in-session if 'ask'
+/**
+ * Unified HTTPS + API presence check.
+ * Browsers will refuse geolocation, notifications, mic access on insecure origins
+ * (except localhost/127.0.0.1). So we treat those as "unsupported".
+ */
+function isSecure(): boolean {
+  try {
+    return (
+      window.isSecureContext ||
+      ['localhost', '127.0.0.1'].includes(location.hostname)
+    );
+  } catch {
+    return false;
+  }
 }
 
-// Fine-grained gates (use where needed)
+/** ----- LOCATION ----- */
 export function gateLocation(): Gate {
-  if (!('geolocation' in navigator)) return { ok: false, reason: 'unsupported' };
+  const hasAPI = typeof navigator !== 'undefined' && 'geolocation' in navigator;
+  if (!hasAPI || !isSecure())
+    return { ok: false, reason: 'unsupported' };
+
   const d = decidePerm('location');
   if (d === 'allow') return { ok: true };
-  if (d === 'deny')  return { ok: false, reason: 'denied' };
-  return { ok: false, reason: 'ask' };
-}
-export function gateMic(): Gate {
-  const hasAPI =
-    'SpeechRecognition' in (window as any) ||
-    'webkitSpeechRecognition' in (window as any);
-  if (!hasAPI) return { ok: false, reason: 'unsupported' };
-  const d = decidePerm('mic');
-  if (d === 'allow') return { ok: true };
-  if (d === 'deny')  return { ok: false, reason: 'denied' };
-  return { ok: false, reason: 'ask' };
-}
-export function gateNotifications(): Gate {
-  if (!('Notification' in window)) return { ok: false, reason: 'unsupported' };
-  const d = decidePerm('notifications');
-  if (d === 'allow') return { ok: true };
-  if (d === 'deny')  return { ok: false, reason: 'denied' };
+  if (d === 'deny') return { ok: false, reason: 'denied' };
   return { ok: false, reason: 'ask' };
 }
 
-// Convenience (what the Notifications screen shows)
-export { getPermPolicy } from './permPrefs';
+/** ----- NOTIFICATIONS ----- */
+export function gateNotifications(): Gate {
+  const hasAPI =
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    typeof (Notification as any).requestPermission === 'function';
+  if (!hasAPI || !isSecure())
+    return { ok: false, reason: 'unsupported' };
+
+  const d = decidePerm('notifications');
+  if (d === 'allow') return { ok: true };
+  if (d === 'deny') return { ok: false, reason: 'denied' };
+  return { ok: false, reason: 'ask' };
+}
+
+/** ----- MICROPHONE ----- */
+export function gateMic(): Gate {
+  const hasAPI =
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.getUserMedia;
+  if (!hasAPI || !isSecure())
+    return { ok: false, reason: 'unsupported' };
+
+  const d = decidePerm('mic');
+  if (d === 'allow') return { ok: true };
+  if (d === 'deny') return { ok: false, reason: 'denied' };
+  return { ok: false, reason: 'ask' };
+}

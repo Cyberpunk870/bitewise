@@ -1,7 +1,8 @@
 // src/lib/session.ts
 import type { AddressLabel } from '../store/address';
+import { getAuth, signOut } from 'firebase/auth';
 
-/** What we keep in session (ephemeral, per tab) */
+// What we keep in session (ephemeral, per tab)
 export type SessionUser = {
   uid: string;
   phone: string;
@@ -13,8 +14,8 @@ export type SessionUser = {
 };
 
 const KEY_USER = 'bw.session.user.v1';
-const KEY_PHONE = 'bw.session.phone';           // used across the app already
-const KEY_LOGOUT_REASON = 'bw.logoutReason';    // 'idle' | 'manual' | 'other' | ''
+const KEY_PHONE = 'bw.session.phone';
+const KEY_LOGOUT_REASON = 'bw.logoutReason'; // 'idle' | 'manual' | 'other' | ''
 const KEY_LAST_PHONE = 'bw.lastPhone';
 
 /* ---------------------- Basic session helpers ----------------------- */
@@ -60,54 +61,105 @@ export function getLogoutReason(): LogoutReason {
   }
 }
 
+/* ------------------------ Shared signOut helper --------------------- */
+/** Make sure Firebase auth is actually killed so ID token stops working */
+async function doFirebaseSignOut() {
+  try {
+    await signOut(getAuth());
+    // console.log('✅ Firebase signOut ran');
+  } catch {
+    // console.warn('⚠️ Firebase signOut failed', err);
+  }
+}
+
 /* ------------------------ Idle watcher (1m) ------------------------- */
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * Starts watching for inactivity. On idle:
+ *  - remember last phone
+ *  - mark logoutReason=idle
+ *  - sign out of Firebase (hard kill)
+ *  - clear in-tab session
+ *  - redirect to /unlock
+ */
 export function initIdleSessionWatcher(options?: { minutes?: number }) {
   const minutes =
     typeof options?.minutes === 'number'
       ? options.minutes
       : Number((import.meta as any).env?.VITE_IDLE_MINUTES ?? 1);
 
-  const IDLE_MS = Math.max(0.2, minutes) * 60 * 1000; // clamp to >=12s
+  const IDLE_MS = Math.max(0.2, minutes) * 60 * 1000; // clamp >= ~12s
+
+  const onIdle = async () => {
+    try {
+      // remember last phone so Unlock can prefill
+      const phone =
+        sessionStorage.getItem(KEY_PHONE) ||
+        loadSession()?.phone ||
+        '';
+      if (phone) {
+        try {
+          localStorage.setItem(KEY_LAST_PHONE, phone);
+        } catch {}
+      }
+
+      // mark why we logged out
+      setLogoutReason('idle');
+
+      // HARD sign out of Firebase so backend tokens are invalidated
+      await doFirebaseSignOut();
+
+      // nuke in-tab session
+      clearSession();
+
+      // let listeners refresh UI state (headers, balances, etc.)
+      try {
+        window.dispatchEvent(new Event('bw:auth:changed'));
+      } catch {}
+    } finally {
+      // hard redirect into lock screen
+      window.location.href = '/unlock';
+    }
+  };
 
   const reset = () => {
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = setTimeout(onIdle, IDLE_MS);
   };
 
-  const onIdle = () => {
-    try {
-      // persist last phone for quick passkey on Unlock
-      const phone = sessionStorage.getItem(KEY_PHONE) || loadSession()?.phone || '';
-      if (phone) localStorage.setItem(KEY_LAST_PHONE, phone);
-
-      setLogoutReason('idle');
-      clearSession();
-    } finally {
-      // simple hard redirect to Unlock
-      window.location.href = '/unlock';
-    }
-  };
-
   const onActivity = () => {
-    // Only reset when tab is visible to avoid fighting background timers
+    // Only reset when tab is visible; don't spam while backgrounded
     if (document.visibilityState === 'visible') reset();
   };
 
   // start immediately and attach listeners
   reset();
-
   const opts: AddEventListenerOptions = { passive: true };
-  ['mousemove', 'keydown', 'click', 'touchstart', 'scroll', 'pointerdown', 'wheel', 'visibilitychange'].forEach(
-    (evt) => {
-      window.addEventListener(evt, () => {
-        if (evt === 'visibilitychange' && document.visibilityState !== 'visible') return;
+  [
+    'mousemove',
+    'keydown',
+    'click',
+    'touchstart',
+    'scroll',
+    'pointerdown',
+    'wheel',
+    'visibilitychange',
+  ].forEach((evt) => {
+    window.addEventListener(
+      evt,
+      () => {
+        if (
+          evt === 'visibilitychange' &&
+          document.visibilityState !== 'visible'
+        )
+          return;
         reset();
-      }, opts);
-    }
-  );
+      },
+      opts
+    );
+  });
 }
 
 export function stopIdleSessionWatcher() {
@@ -118,27 +170,44 @@ export function stopIdleSessionWatcher() {
 }
 
 /* -------------------- Manual logout (use this!) --------------------- */
-/** Call this from any logout button/menu. Do NOT call clearSession() directly. */
-// DO NOT call clearSession() directly from UI.
-// Use this instead.
-export function manualLogout(opts?: { navigate?: (path: string) => void }) {
+/**
+ * Call this from Settings → Logout button.
+ * It duplicates the same cleanup as idle, but reason='manual'
+ * and it navigates to phone login instead of /unlock.
+ */
+export async function manualLogout(opts?: { navigate?: (path: string) => void }) {
   try {
-    // Remember last phone so PasskeyLogin can prefill
-    const phone = sessionStorage.getItem('bw.session.phone') || loadSession()?.phone || '';
-    if (phone) localStorage.setItem('bw.lastPhone', phone);
+    // remember last phone for Unlock
+    const phone =
+      sessionStorage.getItem(KEY_PHONE) ||
+      loadSession()?.phone ||
+      '';
+    if (phone) {
+      try {
+        localStorage.setItem(KEY_LAST_PHONE, phone);
+      } catch {}
+    }
   } catch {}
 
-  // Set reason for guards
+  // sign out from Firebase so API calls lose auth immediately
+  await doFirebaseSignOut();
+
+  // mark reason
   setLogoutReason('manual');
 
-  // Redirect to phone login in "login" mode
+  // tell the app shell "auth changed"
+  try {
+    window.dispatchEvent(new Event('bw:auth:changed'));
+  } catch {}
+
+  // start navigation to login
   if (opts?.navigate) {
     opts.navigate('/onboarding/auth/phone?mode=login');
   } else if (typeof window !== 'undefined') {
     window.location.href = '/onboarding/auth/phone?mode=login';
   }
 
-  // 🔑 Clear ephemeral session *after* navigation begins
+  // clear ephemeral session after nav begins
   setTimeout(() => {
     clearSession();
   }, 0);
@@ -147,7 +216,12 @@ export function manualLogout(opts?: { navigate?: (path: string) => void }) {
 /* Utility: keep last phone without logging out (optional elsewhere) */
 export function rememberLastPhoneFromSession() {
   try {
-    const phone = sessionStorage.getItem(KEY_PHONE) || loadSession()?.phone || '';
-    if (phone) localStorage.setItem(KEY_LAST_PHONE, phone);
+    const phone =
+      sessionStorage.getItem(KEY_PHONE) ||
+      loadSession()?.phone ||
+      '';
+    if (phone) {
+      localStorage.setItem(KEY_LAST_PHONE, phone);
+    }
   } catch {}
 }

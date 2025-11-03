@@ -1,17 +1,38 @@
-// /src/screens/home/Home.tsx
+// src/screens/home/Home.tsx
 import React, { useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
-import useCart from '../../store/cart';
+import { useCart } from '../../store/cart';
 import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
 import { getDishImage, placeholderDishUrl } from '../../lib/images';
 import { ensureActiveProfile, getActiveProfile } from '../../lib/profileStore';
-import { haversineMeters, reverseGeocode, deriveAddressLabel, maybeLiveLocationFlow } from '../../lib/location';
-import { usePermDecision, setPermPolicy, allowForThisSession } from '../../lib/permPrefs';
+import {
+  haversineMeters,
+  reverseGeocode,
+  deriveAddressLabel,
+  maybeLiveLocationFlow,
+  SAME_LOCATION_THRESHOLD_M,
+} from '../../lib/location';
+import { usePermDecision, setPermPolicy, allowForThisSession, decidePerm } from '../../lib/permPrefs';
 import { emit } from '../../lib/events';
+import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressBook'; // ← NEW
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
+
+/** --- NEW: prompt suppression (prevents loop after “Update address”) --- */
+const SUPPRESS_KEY = 'bw.locationPrompt.suppressUntil';
+const SUPPRESS_MS = 8 * 60 * 1000; // ~8 min grace
+function setPromptSuppress(ms = SUPPRESS_MS) {
+  try { sessionStorage.setItem(SUPPRESS_KEY, String(Date.now() + ms)); } catch {}
+}
+function isPromptSuppressed() {
+  try {
+    const t = Number(sessionStorage.getItem(SUPPRESS_KEY) || '0');
+    return t > Date.now();
+  } catch { return false; }
+}
+function clearPromptSuppress() { try { sessionStorage.removeItem(SUPPRESS_KEY); } catch {} }
 
 /* ----- tiny stars ----- */
 function Star({ filled }: { filled: boolean }) {
@@ -136,7 +157,6 @@ const DishCard = memo(function DishCard({
 export default function Home() {
   const nav = useNavigate();
   const locPerm = usePermDecision('location'); // 'allow' | 'deny' | 'ask'
-
   const { add, dec, itemsMap, count } = useCart();
 
   // recent thumbnails (kept, but filtered to only items still in cart)
@@ -150,11 +170,10 @@ export default function Home() {
 
   // task signal
   function addAndTrack({ id, name }: { id: string; name: string }) {
-    add({ id });
+    add({ id, name });          // ⬅️ was: add({ id })
     pushRecent(String(id));
     emit('bw:dish:add', { id, name });
   }
-
   function onDishSelect(id: string) {
     setSelectedId((cur) => (cur === id ? null : id));
     emit('bw:dish:browse', { id });
@@ -165,7 +184,6 @@ export default function Home() {
   const [filters, setFilters] =
     useState<{ priceMax?: number; ratingMin?: number; distanceMax?: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
   const [isLocModalOpen, setLocModalOpen] = useState(false);
   const live = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [actLabel, setActLabel] = useState<string | null>(null);
@@ -176,8 +194,30 @@ export default function Home() {
   /* ----- startup wiring ----- */
   useEffect(() => { ensureActiveProfile(); }, []);
   useEffect(() => {
-    try { window.dispatchEvent(new CustomEvent('bw:dishes:names', { detail: allDishNames() })); } catch {}
+    try {
+      const names = DISH_CATALOG.map((d: any) => d.name);
+      window.dispatchEvent(new CustomEvent('bw:dishes:names', { detail: names }));
+    } catch {}
   }, []);
+
+  // ❌ Remove the older hard-coded redirect to location wizard on this flag.
+  // (AppShell now routes to the correct first-needed permission.)
+  // Keep this effect as a fallback (it routes to the *first* needed perm if a flag is still present)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('bw.requirePermRecheck') === '1') {
+        sessionStorage.removeItem('bw.requirePermRecheck');
+        const needs = (['location', 'notifications', 'mic'] as const)
+          .filter((k) => decidePerm(k) === 'ask');
+        if (needs.length) {
+          nav(`/onboarding/perm/${needs[0]}?from=unlock`, { replace: true });
+        }
+        emit('bw:perm:recheck', null);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const onLive = (e: Event) => {
       const val = (e as CustomEvent).detail as string;
@@ -195,6 +235,7 @@ export default function Home() {
       window.removeEventListener('bw:voice:search', onVoice as any);
     };
   }, []);
+
   useEffect(() => {
     const onFilters = (e: Event) => {
       const pf = ((e as CustomEvent).detail as any) || null;
@@ -205,21 +246,31 @@ export default function Home() {
     return () => window.removeEventListener('bw:filters:update', onFilters as any);
   }, []);
 
-  /** ✅ SINGLE live-location effect
-   * - auto-switch profile if live is within 300 m of any saved address
-   * - otherwise show modal with meters distance
-   * - also responds to backend live pings
-   */
+  /** ✅ SINGLE live-location effect (robust + suppression + multi-address) */
   useEffect(() => {
     let cancelled = false;
 
-    async function run() {
+    async function run(source: string) {
       if (locPerm !== 'allow') return;
+      if (isPromptSuppressed()) return;
 
-      const res = await maybeLiveLocationFlow(({ live: newLive, metersFromActive }) => {
+      const res = await maybeLiveLocationFlow(({ live: newLive }) => {
         if (cancelled) return;
+
+        // Prefer nearest among all saved addresses
+        const { meters } = nearestSavedTo(newLive);
+        if (typeof meters === 'number' && meters <= (SAME_LOCATION_THRESHOLD_M || 100)) {
+          // within 100m -> silently prefer, do nothing
+          return;
+        }
+        if (typeof meters === 'number' && meters < DISTANCE_THRESHOLD_M) {
+          // between 100 and 300m → still skip prompt
+          return;
+        }
+
+        // 300m+ → prompt
         live.current = newLive;
-        setActLabel(`${metersFromActive} m`);
+        setActLabel(typeof meters === 'number' ? `${meters} m` : 'New position');
         setLocModalOpen(true);
       });
 
@@ -228,31 +279,64 @@ export default function Home() {
       }
     }
 
+    run('mount');
+
+    const onVisible = () => { if (document.visibilityState === 'visible') run('visible'); };
+    const onPermRecheck = () => run('perm-recheck');
+
     const onBackendLive = (e: CustomEvent<{ lat: number; lng: number }>) => {
-      if (cancelled || locPerm !== 'allow') return;
+      if (cancelled || locPerm !== 'allow' || isPromptSuppressed()) return;
       const coords = e.detail;
       if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return;
 
-      const saved = getActiveProfile();
-      if (!saved || typeof saved.lat !== 'number' || typeof saved.lng !== 'number') {
+      const { meters } = nearestSavedTo(coords);
+      if (typeof meters === 'number') {
+        if (meters <= (SAME_LOCATION_THRESHOLD_M || 100)) {
+          // within 100m of a saved address → do nothing (silently prefer saved)
+          return;
+        }
+        if (meters >= DISTANCE_THRESHOLD_M) {
+          live.current = coords;
+          setActLabel(`${Math.round(meters)} m`);
+          setLocModalOpen(true);
+        }
+      } else {
+        // no saved addresses → behave like before
         live.current = coords;
         setActLabel('New position');
-        setLocModalOpen(true);
-        return;
-      }
-      const meters = haversineMeters({ lat: saved.lat!, lng: saved.lng! }, coords);
-      if (meters >= DISTANCE_THRESHOLD_M) {
-        live.current = coords;
-        setActLabel(`${Math.round(meters)} m`);
         setLocModalOpen(true);
       }
     };
 
-    run();
+    const onProfileUpdate = () => {
+      try {
+        // remember updated active profile in the address book
+        rememberActiveProfileAddress(); // ← NEW
+
+        const saved = getActiveProfile();
+        if (!saved || live.current.lat == null || live.current.lng == null) return;
+
+        const { meters } = nearestSavedTo({ lat: live.current.lat!, lng: live.current.lng! });
+        if (typeof meters === 'number' && meters <= (SAME_LOCATION_THRESHOLD_M || 100)) {
+          clearPromptSuppress();
+        }
+      } catch {}
+      setLocationKey(`profile:${Date.now()}`);
+    };
+
+    window.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('bw:perm:recheck' as any, onPermRecheck as any);
     window.addEventListener('bw:backend:liveLocation' as any, onBackendLive as any);
+    window.addEventListener('bw:profile:update' as any, onProfileUpdate as any);
+    window.addEventListener('storage', onProfileUpdate as any);
+
     return () => {
       cancelled = true;
+      window.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('bw:perm:recheck' as any, onPermRecheck as any);
       window.removeEventListener('bw:backend:liveLocation' as any, onBackendLive as any);
+      window.removeEventListener('bw:profile:update' as any, onProfileUpdate as any);
+      window.removeEventListener('storage', onProfileUpdate as any);
     };
   }, [locPerm]);
 
@@ -298,25 +382,22 @@ export default function Home() {
   }, [activeTab, query, filters, locationKey, itemsMap]);
 
   /* ----- helpers ----- */
-  const qtyOf = (id: string | number) => itemsMap?.[String(id)]?.qty ?? 0;
+  const qtyOf = (id: string | number) => (itemsMap as any)?.[String(id)]?.qty ?? 0;
 
-  // 🚦 “Use current” now routes to AddressPick → AddressLabel
+  // 🚦 “Update address” → seed onboarding and suppress prompts while we travel there
   async function onLocationChanged() {
     const livePos = live.current;
     if (!livePos || livePos.lat == null || livePos.lng == null) return;
-    const addr = await reverseGeocode(livePos);
+    setPromptSuppress();
+    const addr = await reverseGeocode(livePos as any);
     const label2 = deriveAddressLabel(addr);
-
-    // seed onboarding so AddressPick/AddressLabel can prefill
     try {
       sessionStorage.setItem(
         'bw.pending.liveAddress',
         JSON.stringify({ lat: livePos.lat, lng: livePos.lng, addressLine: addr, label: label2 })
       );
     } catch {}
-
     emit('bw:location:changed', { lat: livePos.lat, lng: livePos.lng });
-
     nav('/onboarding/address/pick', { replace: true });
   }
 
@@ -326,7 +407,6 @@ export default function Home() {
     const filtered = recentRef.current.filter((id) => idsInCart.has(String(id)));
     const backfill = Object.keys(itemsMap || {}).filter((id) => !filtered.includes(id));
     const ids = [...filtered, ...backfill].slice(-3);
-
     return ids.map((id) => {
       const key = String(id);
       const entry = (itemsMap as any)?.[key] || {};
@@ -343,36 +423,6 @@ export default function Home() {
       <div className="max-w-4xl mx-auto w-full max-w-6xl px-3 pb-28">
         <AppHeader />
 
-        {/* Inline permission banner—shows when "Only this time" expired */}
-        {locPerm === 'ask' && (
-          <div className="mt-3 rounded-2xl border bg-white/95 shadow p-3">
-            <div className="text-sm font-medium">Share your location for better results</div>
-            <div className="text-xs opacity-70 mt-0.5">
-              Allow location to personalise dishes and availability near you.
-            </div>
-            <div className="mt-2 flex gap-2">
-              <button
-                className="px-3 py-1.5 rounded-full bg-black text-white"
-                onClick={() => setPermPolicy('location', 'always')}
-              >
-                Always allow
-              </button>
-              <button
-                className="px-3 py-1.5 rounded-full border"
-                onClick={() => allowForThisSession('location')}
-              >
-                Only this time
-              </button>
-              <button
-                className="px-3 py-1.5 rounded-full border"
-                onClick={() => setPermPolicy('location', 'never')}
-              >
-                Don’t allow
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Tabs */}
         <div className="mt-4 flex gap-2">
           {[
@@ -380,15 +430,15 @@ export default function Home() {
             { key: 'popular', label: 'Popular' },
             { key: 'frequent', label: 'Frequently Ordered' },
             { key: 'value', label: 'Best Offers' },
-          ].map((t: { key: TabKey; label: string }) => (
+          ].map((t: any) => (
             <button
               key={t.key}
               type="button"
               onClick={() => setActiveTab(t.key as TabKey)}
               className={[
                 'px-3 py-1.5 rounded-full text-sm border transition',
-                activeTab === t.key ? 'bg-black text-white border-black' : 'bg-white/70 border-black/20',
-              ].join(' ')}
+                activeTab === t.key ? 'bg-black text-white border-black' : 'bg白/70 border-black/20',
+              ].join(' ').replace('白','white')} // keeps your style, avoids locale char issues
             >
               {t.label}
             </button>
@@ -448,11 +498,13 @@ export default function Home() {
         {/* Location modal */}
         {isLocModalOpen && (
           <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/40">
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w/full max-w-md">
               <div className="rounded-2xl border bg-white p-4">
-                <p className="font-semibold mb-2">Use current location?</p>
+                <p className="font-semibold mb-2">Kindly update your location</p>
                 <p className="text-sm opacity-70 mb-4">
-                  We found a location {actLabel ? `(~${actLabel})` : ''}. This adjusts menus near your saved address.
+                  {actLabel
+                    ? `You're ~${actLabel} from your saved address. Update for accurate prices.`
+                    : 'Update your location for accurate prices.'}
                 </p>
                 <div className="flex gap-2 justify-end">
                   <button
@@ -468,14 +520,16 @@ export default function Home() {
                       setLocModalOpen(false);
                     }}
                   >
-                    Use current
+                    Update address
                   </button>
                 </div>
               </div>
             </div>
           </div>
         )}
+
       </div>
     </main>
   );
 }
+

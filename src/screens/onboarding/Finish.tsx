@@ -1,3 +1,4 @@
+// src/screens/onboarding/Finish.tsx
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useOnboarding from '../../store/onboarding';
@@ -11,35 +12,42 @@ export default function Finish() {
   const address = useAddress();
 
   useEffect(() => {
-    const phone = sessionStorage.getItem('bw.session.phone') || '';
+    const phone =
+      sessionStorage.getItem('bw.session.phone') || '';
 
-    // Normalize label (union -> string)
-    const label =
-      typeof address.label === 'string'
-        ? address.label
-        : address.label?.custom || undefined;
+    // Normalize label from address store:
+    // address.label may be string OR { custom: string }
+    const rawLabel: any = (address as any).label;
+    const normLabel =
+      typeof rawLabel === 'string'
+        ? rawLabel
+        : rawLabel?.custom || undefined;
 
     saveProfile({
       phone,
       name,
       addressLine: address.addressLine ?? addressLine,
-      addressLabel: label,
+      addressLabel: normLabel,
     });
 
     setActivePhone(phone);
 
     // Persist explicit completion so refresh always works
-    persistUtils.save?.({
+    // Cast to any here to avoid TS complaining about keys
+    const patch: any = {
       complete: true,
       completed: true,
       phone,
       name,
       addressLine: address.addressLine ?? addressLine,
-    });
+    };
+    try {
+      persistUtils.save?.(patch);
+    } catch {}
 
     markComplete(); // keep your existing zustand completion too
     nav('/home', { replace: true });
-  }, []);
+  }, [name, addressLine, markComplete, address, nav]);
 
   return null;
 }

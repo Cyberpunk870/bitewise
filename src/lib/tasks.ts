@@ -1,6 +1,8 @@
 // src/lib/tasks.ts
 import { emit, on } from './events';
 import { addNotice } from './notifications';
+import { getAuth } from 'firebase/auth';
+import { addCoins as apiAddCoins } from './api';
 
 /* -------------------------------------------------------------------------- */
 /*                                Type system                                 */
@@ -186,7 +188,8 @@ function updateProgress(kind: TaskKind, by = 1) {
   }
 }
 
-export function claimTask(id: string) {
+export async function claimTask(id: string):
+Promise<void> { 
   const list = getTasks();
   const idx = list.findIndex(t => t.id === id);
   if (idx < 0) return;
@@ -194,9 +197,17 @@ export function claimTask(id: string) {
   if (!t.ready || t.done) return;
   const updated = list.filter(x => x.id !== id);
   setTasks(updated);
+
   addBites(t.reward);
   addNotice({ kind:'milestone', title:'Task complete ✅', body:`${t.title} (+${t.reward} Bites)` });
+  try {
+    const uid = getAuth().currentUser?.uid;
+    if (uid) {
+      await apiAddCoins( t.reward, `task:${t.id}`);
+    }
+  } catch{}
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*                          Ground Truth Behaviors                            */
@@ -279,7 +290,7 @@ const GROUND_TRUTH: Record<string, TaskKind> = {
 /*                         Event → Progress wiring                            */
 /* -------------------------------------------------------------------------- */
 let wired = false;
-const lastHit: Record<TaskKind, number> = {};
+const lastHit: Partial<Record<TaskKind, number>> = {};
 const THROTTLE_MS: Partial<Record<TaskKind, number>> = {
   browse:250, add_to_cart:150, search:300,
 };
@@ -288,7 +299,9 @@ export function startTaskAutoTracking() {
   if (wired) return; wired = true;
 
   // map all events to progress
-  Object.entries(GROUND_TRUTH).forEach(([evt, kind]) => {
+  (Object.entries(GROUND_TRUTH) as Array<[string,
+    TaskKind]>).forEach(
+    ([evt, kind]) => {
     on(evt, () => {
       const now = Date.now();
       const min = THROTTLE_MS[kind] || 0;
@@ -297,6 +310,7 @@ export function startTaskAutoTracking() {
       updateProgress(kind, 1);
     });
   });
+}
 
   // derived: fast_add (within 15s of first browse)
   const firstSeen: Record<string, number> = {};
@@ -311,17 +325,16 @@ export function startTaskAutoTracking() {
 
   // derived: session length
   let sessionStart = Date.now();
-  on('bw:session:start', () => sessionStart = Date.now());
-  on('bw:session:end', () => {
-    if (Date.now() - sessionStart >= 10 * 60 * 1000) updateProgress('long_session', 1);
-  });
+on('bw:session:start', () => { sessionStart = Date.now(); });
+on('bw:session:end', () => {
+  if (Date.now() - sessionStart >= 10 * 60 * 1000) updateProgress('long_session', 1);
+});
 
-  // derived: return visit
-  try {
-    const last = Number(localStorage.getItem('bw.return.last') || '0');
-    if (Date.now() - last >= 24 * 60 * 60 * 1000) {
-      localStorage.setItem('bw.return.last', String(Date.now()));
-      emit('bw:derived:return_visit', null);
-    }
-  } catch {}
-}
+// derived: return visit
+try {
+  const last = Number(localStorage.getItem('bw.return.last') || '0'); // ← note the dot key, not underscore
+  if (Date.now() - last >= 24 * 60 * 60 * 1000) {
+    localStorage.setItem('bw.return.last', String(Date.now()));
+    emit('bw:derived:return_visit', null);
+  }
+} catch {}

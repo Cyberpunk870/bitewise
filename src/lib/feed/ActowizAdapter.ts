@@ -1,5 +1,6 @@
-// src/lib/feed/ActowizAdapter.ts
 import { addNotice } from '../notifications';
+import { setLastAvailabilitySync } from '../dataSync';
+import { emit } from '../events';
 
 type ActowizEvent =
   | { type: 'price_drop'; dish: string; newPrice: number; oldPrice?: number }
@@ -38,6 +39,10 @@ export function startActowizFeed(opts: { apiBase: string; token?: string }) {
             break;
         }
       }
+
+      // mark a successful sync moment (even if no events) so UI shows freshness
+      setLastAvailabilitySync(Date.now());
+      emit('bw:data:availability:tick', {}); // optional: any listeners
     } catch {
       // simple backoff
       await new Promise(r => setTimeout(r, 5000));

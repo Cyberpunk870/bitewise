@@ -1,12 +1,13 @@
 // src/components/AppHeader.tsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useCart } from '../store/cart';
+import useCart from '../store/cart'; // ✅ default import (not { useCart })
 import { getActiveProfile } from '../lib/profileStore';
-import { clearSessionPerms } from '../lib/permPrefs';
+import { decidePerm } from '../lib/permPrefs';
 import { getBadgeCounts } from '../lib/badgeCounts';
 import CoinIcon from './CoinIcon';
 import { emit } from '../lib/events';
+import { manualLogout } from '../lib/session'; // ✅ NEW: single source of truth
 
 /* icons */
 function MicIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -49,7 +50,9 @@ function BurgerAvatar(props: React.SVGProps<SVGSVGElement>) {
 
 /* dispatch helpers for search/filters */
 function fire<T>(name: string, detail: T) {
-  try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent(name, { detail }));
+  } catch {}
 }
 
 export default function AppHeader() {
@@ -67,7 +70,7 @@ export default function AppHeader() {
       window.removeEventListener('bw:profile:update' as any, refresh as any);
     };
   }, []);
-  const name = profile?.name || 'Guest';
+  const name = profile?.name?.trim() ? profile.name : 'Guest';
   const addressLine = profile?.addressLine || '';
   const addressLabel = profile?.addressLabel || '';
 
@@ -76,6 +79,8 @@ export default function AppHeader() {
   const [inputValue, setInputValue] = useState('');
   const [suggest, setSuggest] = useState('');
   const dishNamesRef = useRef<string[]>([]);
+
+  // rotating placeholder
   useEffect(() => {
     const PROMPTS = [
       'Try “chicken biryani”',
@@ -84,27 +89,57 @@ export default function AppHeader() {
       'Find “veg momos”',
     ];
     let i = 0;
-    const id = setInterval(() => { setPlaceholder(PROMPTS[i % PROMPTS.length]); i += 1; }, 2800);
+    const id = setInterval(() => {
+      setPlaceholder(PROMPTS[i % PROMPTS.length]);
+      i += 1;
+    }, 2800);
     return () => clearInterval(id);
   }, []);
+
+  // collect names for suggestions
   useEffect(() => {
-    const onNames = (e: Event) => { dishNamesRef.current = ((e as CustomEvent).detail as string[]) || []; };
+    const onNames = (e: Event) => {
+      dishNamesRef.current = ((e as CustomEvent).detail as string[]) || [];
+    };
     window.addEventListener('bw:dishes:names' as any, onNames);
     return () => window.removeEventListener('bw:dishes:names' as any, onNames);
   }, []);
+
   function computeSuggestion(q: string) {
-    const names = dishNamesRef.current; if (!q) return '';
+    const names = dishNamesRef.current;
+    if (!q) return '';
     const lower = q.toLowerCase();
-    const hit = names.find(n => n.toLowerCase().startsWith(lower));
+    const hit = names.find((n) => n.toLowerCase().startsWith(lower));
     return hit && hit.length > q.length ? hit : '';
   }
-  function onInputChange(v: string) { setInputValue(v); setSuggest(computeSuggestion(v)); fire('bw:keyword:live', v); }
-  function onSubmitEnter() { const v = inputValue.trim(); if (!v) return; fire('bw:keyword:search', v); }
-  function clearInput() { setInputValue(''); setSuggest(''); fire('bw:keyword:live', ''); }
+  function onInputChange(v: string) {
+    setInputValue(v);
+    setSuggest(computeSuggestion(v));
+    fire('bw:keyword:live', v);
+  }
+  function onSubmitEnter() {
+    const v = inputValue.trim();
+    if (!v) return;
+    fire('bw:keyword:search', v);
+  }
+  function clearInput() {
+    setInputValue('');
+    setSuggest('');
+    fire('bw:keyword:live', '');
+  }
 
-  // 🔊 Voice search (with friendly errors)
+  // 🔊 Voice search — respect mic decision; no silent session writes
   async function handleVoice() {
-    const okProto = location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
+    const micDec = decidePerm('mic'); // 'allow' | 'deny' | 'ask'
+    if (micDec !== 'allow') {
+      emit('bw:toast', {
+        title: 'Microphone permission needed',
+        body: 'Enable mic in Settings → Permissions to use voice search.',
+      });
+      return;
+    }
+    const okProto =
+      location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
     if (!okProto) {
       emit('bw:toast', { title: 'Voice search error', body: 'Requires HTTPS (or localhost).' });
       return;
@@ -149,14 +184,14 @@ export default function AppHeader() {
   useEffect(() => {
     const refresh = () => setBadges(getBadgeCounts());
     window.addEventListener('storage', refresh);
-    window.addEventListener('bw:badges:update', refresh as any);
-    window.addEventListener('bw:task:done', refresh as any);
-    window.addEventListener('bw:tokens:gain', refresh as any);
+    window.addEventListener('bw:badges:update' as any, refresh as any);
+    window.addEventListener('bw:task:done' as any, refresh as any);
+    window.addEventListener('bw:tokens:gain' as any, refresh as any);
     return () => {
       window.removeEventListener('storage', refresh);
-      window.removeEventListener('bw:badges:update', refresh as any);
-      window.removeEventListener('bw:task:done', refresh as any);
-      window.removeEventListener('bw:tokens:gain', refresh as any);
+      window.removeEventListener('bw:badges:update' as any, refresh as any);
+      window.removeEventListener('bw:task:done' as any, refresh as any);
+      window.removeEventListener('bw:tokens:gain' as any, refresh as any);
     };
   }, []);
 
@@ -164,10 +199,18 @@ export default function AppHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const onDown = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
-    document.addEventListener('mousedown', onDown); document.addEventListener('keydown', onEsc);
-    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onEsc); };
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onEsc);
+    };
   }, []);
 
   /* filters */
@@ -176,7 +219,8 @@ export default function AppHeader() {
   const [distanceMax, setDistanceMax] = useState<number>(20);
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('bw.filters'); if (!raw) return;
+      const raw = localStorage.getItem('bw.filters');
+      if (!raw) return;
       const f = JSON.parse(raw) || {};
       if (typeof f.priceMax === 'number') setPriceMax(f.priceMax);
       if (typeof f.ratingMin === 'number') setRatingMin(f.ratingMin);
@@ -185,54 +229,55 @@ export default function AppHeader() {
   }, []);
   function applyFilters() {
     const payload = { priceMax, ratingMin, distanceMax };
-    try { localStorage.setItem('bw.filters', JSON.stringify(payload)); } catch {}
-    fire('bw:filters:update', payload); setMenuOpen(false);
+    try {
+      localStorage.setItem('bw.filters', JSON.stringify(payload));
+    } catch {}
+    fire('bw:filters:update', payload);
+    setMenuOpen(false);
   }
   function resetFilters() {
-    const payload = { priceMax: 1500, ratingMin: 0, distanceMax: 20 };
-    setPriceMax(1500); setRatingMin(0); setDistanceMax(20);
-    try { localStorage.setItem('bw.filters', JSON.stringify(payload)); } catch {}
-    fire('bw:filters:update', payload);
-  }
-
-  // 🔐 Logout → set recheck flag so permission prompts reappear after login
-  function logout() {
+    setPriceMax(1500);
+    setRatingMin(0);
+    setDistanceMax(20);
     try {
-      sessionStorage.setItem('bw.logoutReason', 'manual');
-      sessionStorage.removeItem('bw.session.phone');
-      try { localStorage.removeItem('bw.idle.until'); } catch {}
-      try { clearSessionPerms(); } catch {}
-      try { sessionStorage.setItem('bw.requirePermRecheck', '1'); } catch {}
-      try { window.dispatchEvent(new Event('bw:perm:changed')); } catch {}
-      try { window.dispatchEvent(new Event('bw:auth:changed')); } catch {}
-    } finally {
-      setMenuOpen(false);
-      setTimeout(() => {
-        // your UX sends manual logout to onboarding
-        nav('/onboarding', { replace: true });
-      }, 0);
-    }
+      localStorage.removeItem('bw.filters');
+    } catch {}
+    setInputValue('');
+    setSuggest('');
+    try {
+      window.dispatchEvent(new CustomEvent('bw:keyword:live', { detail: '' }));
+    } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent('bw:filters:update', { detail: null }));
+    } catch {}
+    setMenuOpen(false);
   }
 
-  // ✅ Listen for global "permission recheck" and broadcast again,
-  // so Availability/Home (and any other listeners) reevaluate immediately.
+  // 🔐 Logout (manual) → single helper
+  async function logout() {
+    setMenuOpen(false);
+    await manualLogout();
+  }
+
+  // ✅ Recheck perms signal (stays local; AppShell also handles)
   const [, setPermTick] = useState(0);
   useEffect(() => {
-    const bump = () => setPermTick(t => t + 1);
+    const bump = () => setPermTick((t) => t + 1);
     const onRecheck = () => {
       bump();
       try { emit('bw:perm:changed', null); } catch {}
-      try { window.dispatchEvent(new StorageEvent('storage', { key: 'bw.perm.changed', newValue: Date.now().toString() } as any)); } catch {}
+      try {
+        window.dispatchEvent(
+          new StorageEvent('storage', { key: 'bw.perm.changed', newValue: Date.now().toString() } as any)
+        );
+      } catch {}
     };
-
-    // Fire immediately if a recheck was requested before this mounted
     try {
       if (sessionStorage.getItem('bw.requirePermRecheck') === '1') {
         sessionStorage.removeItem('bw.requirePermRecheck');
         setTimeout(onRecheck, 0);
       }
     } catch {}
-
     window.addEventListener('bw:perm:recheck' as any, onRecheck as any);
     window.addEventListener('bw:auth:changed' as any, onRecheck as any);
     return () => {
@@ -250,19 +295,28 @@ export default function AppHeader() {
         <div className="text-white">
           <h1 className="text-2xl font-bold leading-tight">BiteWise</h1>
           <p className="text-xs opacity-80 -mt-0.5">Eat! Save! Repeat!</p>
-          <p className="text-xs opacity-80 mt-2">Welcome, <span className="font-medium">{name}</span></p>
+          <p className="text-xs opacity-80 mt-2">
+            Welcome, <span className="font-medium">{name}</span>
+          </p>
           {!!(addressLine || addressLabel) && (
             <p className="text-xs opacity-80">
               {addressLabel ? <span className="font-medium">{addressLabel}</span> : null}
-              {addressLabel && addressLine ? ' — ' : ''}{addressLine}
+              {addressLabel && addressLine ? ' — ' : ''}
+              {addressLine}
             </p>
           )}
         </div>
 
         {/* Center: search */}
         <div className="relative">
+          {/* ghost suggestion */}
           <div className="pointer-events-none absolute inset-0 flex items-center px-4 text-black/30 select-none">
-            {inputValue && suggest ? (<><span className="opacity-0">{inputValue}</span><span>{suggest.slice(inputValue.length)}</span></>) : null}
+            {inputValue && suggest ? (
+              <>
+                <span className="opacity-0">{inputValue}</span>
+                <span>{suggest.slice(inputValue.length)}</span>
+              </>
+            ) : null}
           </div>
           <input
             type="search"
@@ -270,14 +324,17 @@ export default function AppHeader() {
             placeholder={placeholder}
             value={inputValue}
             onChange={(e) => onInputChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') onSubmitEnter(); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSubmitEnter();
+            }}
+            aria-label="Search dishes"
           />
           {inputValue && (
             <button
               type="button"
               className="absolute right-10 top-1/2 -translate-y-1/2 h-7 w-7 grid place-items-center rounded-md bg-black/10 hover:bg-black/15"
               onClick={clearInput}
-              aria-label="Clear"
+              aria-label="Clear search"
             >
               ×
             </button>
@@ -287,6 +344,7 @@ export default function AppHeader() {
             className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg border bg-white/90"
             onClick={handleVoice}
             aria-label="Voice search"
+            title="Voice search"
           >
             <MicIcon />
           </button>
@@ -295,7 +353,10 @@ export default function AppHeader() {
         {/* Right: coin pill + cart + menu */}
         <div className="justify-self-end flex items-center gap-3 relative">
           <button
-            onClick={() => { emit('bw:open:tasks', null); nav('/tasks'); }}
+            onClick={() => {
+              emit('bw:open:tasks', null);
+              nav('/tasks');
+            }}
             className="h-9 min-w-[48px] px-2 grid grid-cols-[16px_auto] items-center gap-1 rounded-full border bg-white/90 shadow"
             title="Your Bites"
             aria-label="Your Bites"
@@ -324,7 +385,7 @@ export default function AppHeader() {
             <button
               type="button"
               className="h-9 w-10 grid place-items-center rounded-xl border bg-white/90 shadow"
-              onClick={() => setMenuOpen(v => !v)}
+              onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
               aria-haspopup="menu"
               title="Menu"
@@ -334,24 +395,51 @@ export default function AppHeader() {
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 top-full mt-2 w=[320px] max-h-[70vh] overflow-auto rounded-2xl border bg-white/95 shadow p-2 z-50"
+                className="absolute right-0 top-full mt-2 w-[320px] max-h-[70vh] overflow-auto rounded-2xl border bg-white/95 shadow p-2 z-50"
               >
                 <div className="grid gap-2">
-                  <Link to="/notifications" onClick={() => setMenuOpen(false)} className="relative block rounded-xl px-3 py-2 hover:bg-black/5">
+                  <Link
+                    to="/notifications"
+                    onClick={() => setMenuOpen(false)}
+                    className="relative block rounded-xl px-3 py-2 hover:bg-black/5"
+                  >
                     Notifications
-                    {badges.notif > 0 && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-black text-white rounded-full px-2">{badges.notif}</span>}
                   </Link>
-                  <Link to="/tasks" onClick={() => setMenuOpen(false)} className="relative block rounded-xl px-3 py-2 hover:bg-black/5">
+                  <Link
+                    to="/tasks"
+                    onClick={() => setMenuOpen(false)}
+                    className="relative block rounded-xl px-3 py-2 hover:bg-black/5"
+                  >
                     Tasks
-                    {badges.tasks > 0 && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs bg-black text-white rounded-full px-2">{badges.tasks}</span>}
                   </Link>
-                  <Link to="/leaderboard" onClick={() => setMenuOpen(false)} className="relative block rounded-xl px-3 py-2 hover:bg-black/5">
+                  <Link
+                    to="/leaderboard"
+                    onClick={() => setMenuOpen(false)}
+                    className="relative block rounded-xl px-3 py-2 hover:bg-black/5"
+                  >
                     Leaderboard
-                    {badges.leaderboard > 0 && <span className="absolute right-2 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-black" />}
                   </Link>
-                  <Link to="/achievements" onClick={() => setMenuOpen(false)} className="block rounded-xl px-3 py-2 hover:bg-black/5">Achievements</Link>
-                  <Link to="/orders/history" onClick={() => setMenuOpen(false)} className="block rounded-xl px-3 py-2 hover:bg-black/5">Order history</Link>
-                  <Link to="/settings" onClick={() => setMenuOpen(false)} className="block rounded-xl px-3 py-2 hover:bg-black/5">Settings</Link>
+                  <Link
+                    to="/achievements"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-xl px-3 py-2 hover:bg-black/5"
+                  >
+                    Achievements
+                  </Link>
+                  <Link
+                    to="/orders/history"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-xl px-3 py-2 hover:bg-black/5"
+                  >
+                    Order history
+                  </Link>
+                  <Link
+                    to="/settings"
+                    onClick={() => setMenuOpen(false)}
+                    className="block rounded-xl px-3 py-2 hover:bg-black/5"
+                  >
+                    Settings
+                  </Link>
 
                   {/* Filters */}
                   <details className="mt-1 rounded-xl border bg-white/95 open:shadow-sm">
@@ -362,25 +450,53 @@ export default function AppHeader() {
                           <p className="font-medium">Price</p>
                           <p className="text-xs opacity-70">≤ ₹{priceMax}</p>
                         </div>
-                        <input type="range" min={50} max={1500} step={10} value={priceMax} className="w-full" onChange={(e) => setPriceMax(Number(e.target.value))} />
+                        <input
+                          type="range"
+                          min={50}
+                          max={1500}
+                          step={10}
+                          value={priceMax}
+                          className="w-full"
+                          onChange={(e) => setPriceMax(Number(e.target.value))}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between">
                           <p className="font-medium">Rating</p>
                           <p className="text-xs opacity-70">≥ {ratingMin.toFixed(1)}</p>
                         </div>
-                        <input type="range" min={0} max={5} step={0.1} value={ratingMin} className="w-full" onChange={(e) => setRatingMin(Number(e.target.value))} />
+                        <input
+                          type="range"
+                          min={0}
+                          max={5}
+                          step={0.1}
+                          value={ratingMin}
+                          className="w-full"
+                          onChange={(e) => setRatingMin(Number(e.target.value))}
+                        />
                       </div>
                       <div>
                         <div className="flex items-center justify-between">
                           <p className="font-medium">Distance</p>
                           <p className="text-xs opacity-70">≤ {distanceMax} km</p>
                         </div>
-                        <input type="range" min={0} max={20} step={1} value={distanceMax} className="w-full" onChange={(e) => setDistanceMax(Number(e.target.value))} />
+                        <input
+                          type="range"
+                          min={0}
+                          max={20}
+                          step={1}
+                          value={distanceMax}
+                          className="w-full"
+                          onChange={(e) => setDistanceMax(Number(e.target.value))}
+                        />
                       </div>
                       <div className="flex items-center justify-between">
-                        <button className="px-3 py-2 rounded border" onClick={resetFilters}>Reset</button>
-                        <button className="px-4 py-2 rounded-xl bg-black text-white" onClick={applyFilters}>Done</button>
+                        <button className="px-3 py-2 rounded border" onClick={resetFilters}>
+                          Reset
+                        </button>
+                        <button className="px-4 py-2 rounded-xl bg-black text-white" onClick={applyFilters}>
+                          Done
+                        </button>
                       </div>
                     </div>
                   </details>

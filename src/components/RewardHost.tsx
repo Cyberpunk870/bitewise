@@ -1,3 +1,4 @@
+// src/components/RewardHost.tsx
 import React, { useEffect, useState } from 'react';
 import { on } from '../lib/events';
 import CoinShower from './CoinShower';
@@ -46,7 +47,9 @@ export default function RewardHost() {
           <div className="pointer-events-auto rounded-2xl bg-white/95 border shadow-xl p-5 w-[320px] text-center animate-[pop_200ms_ease]">
             <div className="text-sm opacity-70">Bits/Bites updated</div>
             <div className="text-3xl font-bold my-2">+{reward.amount}</div>
-            <div className="text-sm">Balance: <b>{anim.val}</b></div>
+            <div className="text-sm">
+              Balance: <b>{anim.val}</b>
+            </div>
           </div>
           <style>{`@keyframes pop{0%{transform:scale(.92);opacity:.4}100%{transform:scale(1);opacity:1}}`}</style>
         </div>
