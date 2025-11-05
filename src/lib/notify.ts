@@ -1,34 +1,38 @@
+/// <reference types="vite/client" />
+
 // src/lib/notify.ts
 // Unified Firebase Cloud Messaging + Local Fallback notification helper for BiteWise
 
-import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
-import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
+import { initializeApp, getApps } from "firebase/app";
+import { getAuth } from "firebase/auth";
 
 /* ----------------------------- Constants ----------------------------- */
 const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY; // public Web Push key from Firebase
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/';
-const LS_LAST_PUSH_TOKEN = 'bw.push.token';
+const API_BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined) || "http://localhost:3000";
+const LS_LAST_PUSH_TOKEN = "bw.push.token";
 
 /* ----------------------------- Firebase App ----------------------------- */
 function getFirebaseApp() {
-  if (getApps().length) return getApps()[0];
+  const existing = getApps();
+  if (existing.length) return existing[0];
   const cfg = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID as string,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string,
   };
   return initializeApp(cfg);
 }
 
 /* ----------------------------- Permission helpers ----------------------------- */
 export async function ensureNotifPermissionOrRoute(nav?: (path: string) => void) {
-  if (!('Notification' in window)) return;
+  if (!("Notification" in window)) return;
   const status = (Notification as any).permission;
-  if (status === 'granted') return;
-  if (status === 'denied') {
-    if (nav) nav('/onboarding/perm/notifications');
+  if (status === "granted") return;
+  if (status === "denied") {
+    if (nav) nav("/onboarding/perm/notifications");
     return;
   }
   try {
@@ -38,7 +42,7 @@ export async function ensureNotifPermissionOrRoute(nav?: (path: string) => void)
 
 function canUsePush(): boolean {
   try {
-    return 'serviceWorker' in navigator && 'PushManager' in window;
+    return "serviceWorker" in navigator && "PushManager" in window;
   } catch {
     return false;
   }
@@ -46,14 +50,19 @@ function canUsePush(): boolean {
 
 /* ----------------------------- Internal helper ----------------------------- */
 async function postJSON(path: string, body: unknown) {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
   const user = getAuth().currentUser;
-  if (!user) throw new Error('not authed');
+  if (!user) throw new Error("not authed");
   const token = await user.getIdToken();
   headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(API_BASE + path, { method: 'POST', headers, body: JSON.stringify(body) });
+  const res = await fetch(API_BASE + path, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data?.ok === false) throw new Error(data?.error || res.statusText);
+  if (!res.ok || (data as any)?.ok === false)
+    throw new Error((data as any)?.error || res.statusText);
   return data;
 }
 
@@ -70,7 +79,6 @@ let inflightGetToken: Promise<string | null> | null = null;
 export async function initOrRefreshPushOnAuth(phoneHint?: string) {
   try {
     if (!(await isSupported())) {
-      // fallback: just mark local token so app can proceed
       try {
         localStorage.setItem(LS_LAST_PUSH_TOKEN, `local-${Date.now()}`);
       } catch {}
@@ -86,7 +94,7 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
   // 1) Ask for permission
   try {
     await ensureNotifPermissionOrRoute();
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
   } catch {}
 
   // 2) Get FCM token (idempotent + retry-once)
@@ -94,7 +102,7 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
   const messaging = getMessaging(app);
 
   if (!VAPID_KEY) {
-    console.warn('[notify] Missing VITE_FCM_VAPID_KEY; push will not register.');
+    console.warn("[notify] Missing VITE_FCM_VAPID_KEY; push will not register.");
     return;
   }
 
@@ -110,63 +118,58 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
     let fcmToken = await inflightGetToken;
     inflightGetToken = null;
 
-    // Retry once if transient AbortError
     if (!fcmToken) {
       await new Promise((r) => setTimeout(r, 800));
       fcmToken = await doGet();
     }
-
     if (!fcmToken) return;
 
     // 3) If token changed, POST to backend
-    const last = localStorage.getItem(LS_LAST_PUSH_TOKEN) || '';
+    const last = localStorage.getItem(LS_LAST_PUSH_TOKEN) || "";
     if (last !== fcmToken) {
       try {
-        await postJSON('api/push/register', {
+        await postJSON("/api/push/register", {
           token: fcmToken,
-          platform: 'web',
+          platform: "web",
           phone_hint: phoneHint || null,
         });
         localStorage.setItem(LS_LAST_PUSH_TOKEN, fcmToken);
-        console.log('✅ Push token registered');
+        console.log("✅ Push token registered");
       } catch (e) {
-        console.warn('⚠️ Failed to register push token', e);
+        console.warn("⚠️ Failed to register push token", e);
       }
     }
 
     // 4) Foreground message hook (optional)
     try {
       onMessage(messaging, (payload) => {
-        console.log('[notify] foreground message', payload);
+        console.log("[notify] foreground message", payload);
       });
     } catch {}
   } catch (err) {
-    console.warn('[notify] getToken failed', err);
+    console.warn("[notify] getToken failed", err);
   }
 }
 
 /* ----------------------------- Local test notification ----------------------------- */
-/**
- * Shows a local notification immediately (no backend).
- * Returns true if shown, false otherwise.
- */
 export async function sendLocalTestNotification(
-  title = 'BiteWise test notification',
-  body = 'If you see this, notifications are working on this device.'
+  title = "BiteWise test notification",
+  body = "If you see this, notifications are working on this device."
 ): Promise<boolean> {
   try {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission !== 'granted') return false;
+    if (!("Notification" in window)) return false;
+    if (Notification.permission !== "granted") return false;
+
     if (canUsePush()) {
       try {
         const reg = await (navigator as any).serviceWorker.ready;
-        await reg.showNotification(title, { body, icon: '/icons/icon-192.png' });
+        await reg.showNotification(title, { body, icon: "/icons/icon-192.png" });
         return true;
       } catch {
-        // fall back
+        // fall back below
       }
     }
-    new Notification(title, { body, icon: '/icons/icon-192.png' });
+    new Notification(title, { body, icon: "/icons/icon-192.png" });
     return true;
   } catch {
     return false;
@@ -174,24 +177,21 @@ export async function sendLocalTestNotification(
 }
 
 /* ----------------------------- Generic local notification ----------------------------- */
-/**
- * Generic local notification helper used by orderReturn flow.
- * Returns true if shown, false otherwise.
- */
 export async function sendLocalNotification(title: string, body: string): Promise<boolean> {
   try {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission !== 'granted') return false;
+    if (!("Notification" in window)) return false;
+    if (Notification.permission !== "granted") return false;
+
     if (canUsePush()) {
       try {
         const reg = await (navigator as any).serviceWorker.ready;
-        await reg.showNotification(title, { body, icon: '/icons/icon-192.png' });
+        await reg.showNotification(title, { body, icon: "/icons/icon-192.png" });
         return true;
       } catch {
         // fallback to plain Notification
       }
     }
-    new Notification(title, { body, icon: '/icons/icon-192.png' } as any);
+    new Notification(title, { body, icon: "/icons/icon-192.png" } as any);
     return true;
   } catch {
     return false;
