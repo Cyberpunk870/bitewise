@@ -30,3 +30,4 @@ dist-ssr
 .env.local
 .vercel
 node_modules/dist/build/.env.DS_Store.vercel
+server/sa.firebase.json
