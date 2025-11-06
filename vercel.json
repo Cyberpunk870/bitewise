@@ -1,3 +1,32 @@
 {
- "rewrites" : [{ "source": "/(.*)", "destination": "/"}]
+  "version": 2,
+  "builds": [
+    {
+      "src": "src/index.html",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
+    },
+    {
+      "src": "api/[...all].ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    // API routes
+    {
+      "src": "/api/(.*)",
+      "dest": "api/[...all].ts"
+    },
+    // Static assets (Vite build output)
+    {
+      "src": "/assets/(.*)",
+      "headers": { "cache-control": "public, max-age=31536000, immutable" },
+      "dest": "/assets/$1"
+    },
+    // SPA routing fallback (must come last)
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
 }
