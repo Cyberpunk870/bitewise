@@ -1,10 +1,10 @@
-// bitewise/api/[...all].ts
-import { app } from '../server/app';
+// api/[...all].ts
 
-// Tell Vercel which runtime to use
-export const config = { runtime: 'nodejs18.x' };
+import app  from "../backend-lib/app";
+import { createServer } from "http";
 
-// Forward requests to your Express app
-export default function handler(req: any, res: any) {
-  return (app as any)(req, res);
-}
+const server = createServer(app as any);
+
+export default (req: any, res: any) => {
+  server.emit("request", req, res);
+};
