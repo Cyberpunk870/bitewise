@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_igCc1ijLbUnUTUUEAnsvfKzrSUML",
+  "orgId": "team_iQDI2V6wAnE9r5UUdevZhdaB",
+  "projectName": "api",
+  "settings": {
+    "createdAt": 1762261221625,
+    "framework": null,
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "22.x"
+  }
+}

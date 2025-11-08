@@ -35,3 +35,4 @@ node_modules/dist/build/.env.DS_Store.vercel
 *.p12
 *.pem
 *.key
+.vercel/
