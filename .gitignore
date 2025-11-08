@@ -7,33 +7,31 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Runtime & Build
 node_modules
 dist
 dist-ssr
-*.local
+.local
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+.vscode/
+.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+.suo
+.ntvs*
+.njsproj
+.sln
+.sw?
 
+# Environment files
 .env
 .env.local
-
-.env
-.env.local
-.vercel
+.Vercel
 node_modules/dist/build/.env.DS_Store.vercel
-# secrets/env – do not commit
+
+# secrets/env - do not commit
 .env*
-server/*.json
 *.p12
 *.pem
 *.key
-server/sa.firebase.json
