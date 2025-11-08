@@ -1,10 +1,6 @@
-// api/[...all].ts
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import app from '../backend-lib/app';
 
-import app  from "../backend-lib/app";
-import { createServer } from "http";
-
-const server = createServer(app as any);
-
-export default (req: any, res: any) => {
-  server.emit("request", req, res);
-};
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  return app(req, res); // This MUST return or respond
+}
