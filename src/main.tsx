@@ -1,3 +1,4 @@
+console.log("VITE_API_BASE=",import.meta.env.VITE_API_BASE);
 // ---- hard-disable Firestore streaming *before* any Firebase import ----
 ;(globalThis as any)._FIREBASE_FIRESTORE_FORCE_LONG_POLLING = true;
 ;(globalThis as any)._FIREBASE_FIRESTORE_USE_FETCH_STREAMS = false;

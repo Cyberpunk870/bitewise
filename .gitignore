@@ -36,3 +36,4 @@ server/*.json
 *.p12
 *.pem
 *.key
+server/sa.firebase.json

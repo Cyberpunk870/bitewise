@@ -1,19 +1,22 @@
-/// src/lib/firebase.ts
+// src/lib/firebase.ts
 // Firebase init with Firestore streaming disabled by default (REST-first),
-// phone OTP helpers, and safe session persistence.
+// phone OTP helpers, and safe session persistence + auth readiness utilities.
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getAuth,
+  setPersistence,
+  browserLocalPersistence,
   RecaptchaVerifier,
   signInWithPhoneNumber,
   type ConfirmationResult,
   onAuthStateChanged,
-} from 'firebase/auth';
-import { getAnalytics, isSupported } from 'firebase/analytics';
+  type User,
+} from "firebase/auth";
+import { getAnalytics, isSupported } from "firebase/analytics";
 
 // read once here so everything else can branch on it
-const USE_CLOUD = import.meta.env.VITE_USE_FIRESTORE === '1';
+const USE_CLOUD = import.meta.env.VITE_USE_FIRESTORE === "1";
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -21,29 +24,94 @@ const firebaseConfig = {
   projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
   appId:             import.meta.env.VITE_FIREBASE_APP_ID,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  // measurementId is optional; only present if Analytics is enabled
+  ...(import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+    ? { measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID }
+    : {}),
 };
 
 export const app  = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+
+// Be explicit about persistence (default is usually local; we lock it in)
+setPersistence(auth, browserLocalPersistence).catch(() => {});
+
+// Optional analytics (no-op if unsupported)
+isSupported()
+  .then((ok) => ok && getAnalytics(app))
+  .catch(() => {});
 
 // 🔒 Only initialize Firestore plumbing if cloud is enabled.
 //     Use a dynamic import to avoid loading the Firestore SDK at all otherwise.
 (async () => {
   if (!USE_CLOUD) return;
   try {
-    const { initializeFirestore } = await import('firebase/firestore');
-    // Cast options to any to appease TS for non-public flags.
+    const { initializeFirestore } = await import("firebase/firestore");
     initializeFirestore(app, {
       experimentalForceLongPolling: true,
       useFetchStreams: false,
-      preferRest: true as any,
     } as any);
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 })();
 
-// Optional analytics (no-op if unsupported)
-isSupported().then((ok) => ok && getAnalytics(app)).catch(() => {});
+/* -------------------------------------------------------------------------- */
+/*                                Auth readiness                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A single promise that resolves after the FIRST auth state emission
+ * (either a signed-in user or `null`), so you can await before calling
+ * protected APIs.
+ */
+let _authReadyResolve: ((u: User | null) => void) | null = null;
+export const authReady: Promise<User | null> = new Promise((resolve) => {
+  _authReadyResolve = resolve;
+});
+
+// Wire once: resolve the promise on first emission, keep listening for app logic.
+let _firstEmission = true;
+onAuthStateChanged(auth, (user) => {
+  try {
+    if (_firstEmission) {
+      _firstEmission = false;
+      _authReadyResolve?.(user ?? null);
+      _authReadyResolve = null;
+    }
+    // optional: broadcast to app (guards, header, etc.)
+    window.dispatchEvent(new Event("bw:auth:changed"));
+  } catch {}
+});
+
+/** Run a callback once Firebase Auth has settled (signed in or out). */
+export async function onAuthReady(cb: (user: User | null) => void | Promise<void>) {
+  const user = await authReady;
+  await cb(user);
+}
+
+/** Returns the current user after Auth is ready (may be `null` if signed out). */
+export async function getAuthReadyUser(): Promise<User | null> {
+  return await authReady;
+}
+
+/** Get a fresh ID token (or null if signed out). */
+export async function getFreshIdToken(): Promise<string | null> {
+  const user = auth.currentUser ?? (await authReady);
+  if (!user) return null;
+  try {
+    return await user.getIdToken(/* forceRefresh */ false);
+  } catch {
+    return null;
+  }
+}
+
+/** Same as getFreshIdToken but throws if the user is not signed in. */
+export async function requireIdToken(): Promise<string> {
+  const tok = await getFreshIdToken();
+  if (!tok) throw new Error("Not authenticated");
+  return tok;
+}
 
 /* ---------------- reCAPTCHA (stable, invisible) ---------------- */
 
@@ -51,6 +119,8 @@ declare global {
   interface Window {
     _bwRecaptcha?: RecaptchaVerifier | null;
     grecaptcha?: any;
+    confirmationResult?: ConfirmationResult;
+    bwAuth?: typeof auth;
   }
 }
 
@@ -58,29 +128,29 @@ declare global {
  * Create or reuse a single invisible reCAPTCHA verifier.
  * Safe across route changes/HMR and avoids "already rendered" errors.
  */
-export function ensureRecaptcha(containerId = 'recaptcha-container'): RecaptchaVerifier {
+export function ensureRecaptcha(containerId = "recaptcha-container"): RecaptchaVerifier {
   const w = window as any;
-  const _auth = getAuth();
 
   // Reuse if we already have one
   if (w._bwRecaptcha instanceof RecaptchaVerifier) {
     return w._bwRecaptcha as RecaptchaVerifier;
   }
 
-  // Ensure container exists (off-screen) and is clean
+  // Ensure container exists (off-screen)
   let el = document.getElementById(containerId);
   if (!el) {
-    el = document.createElement('div');
+    el = document.createElement("div");
     el.id = containerId;
-    el.style.position = 'fixed';
-    el.style.left = '-99999px';
-    el.style.top = '0';
+    el.style.position = "fixed";
+    el.style.left = "-99999px";
+    el.style.top = "0";
     document.body.appendChild(el);
   } else {
-    try { el.innerHTML = ''; } catch {}
+    try { el.innerHTML = ""; } catch {}
   }
 
-  const verifier = new RecaptchaVerifier(_auth, el, { size: 'invisible' });
+  // v10 signature: new RecaptchaVerifier(auth, containerOrId, params)
+  const verifier = new RecaptchaVerifier(auth, containerId, { size: "invisible" });
 
   // Render defensively – ignore "already rendered" errors
   try { (verifier as any).render?.(); } catch {}
@@ -90,14 +160,14 @@ export function ensureRecaptcha(containerId = 'recaptcha-container'): RecaptchaV
 }
 
 /** Clear the current verifier and its DOM, if any. */
-export function clearRecaptcha(containerId = 'recaptcha-container') {
+export function clearRecaptcha(containerId = "recaptcha-container") {
   const w = window as any;
   try { w._bwRecaptcha?.clear?.(); } catch {}
   w._bwRecaptcha = null;
 
   const el = document.getElementById(containerId);
   if (el) {
-    try { el.innerHTML = ''; } catch {}
+    try { el.innerHTML = ""; } catch {}
   }
 
   // If the SDK left a global grecaptcha widget, reset it (best effort).
@@ -108,7 +178,7 @@ export function clearRecaptcha(containerId = 'recaptcha-container') {
 
 export async function sendOtp(phoneE164: string): Promise<ConfirmationResult> {
   const verifier = ensureRecaptcha(); // idempotent
-  const result = await signInWithPhoneNumber(getAuth(), phoneE164, verifier);
+  const result = await signInWithPhoneNumber(auth, phoneE164, verifier);
   (window as any).confirmationResult = result;
   return result;
 }
@@ -116,25 +186,33 @@ export async function sendOtp(phoneE164: string): Promise<ConfirmationResult> {
 export async function confirmOtp(code: string) {
   const w = window as any;
   const pending: ConfirmationResult | undefined = w.confirmationResult;
-  if (!pending) throw new Error('No pending OTP session. Please request a code again.');
+  if (!pending) throw new Error("No pending OTP session. Please request a code again.");
 
   const cred = await pending.confirm(code);
 
+  // Persist a tiny mirror for app guards (optional)
   try {
     const payload = {
       uid: cred.user.uid,
       phone: cred.user.phoneNumber ?? null,
       ts: Date.now(),
     };
-    localStorage.setItem('bw_session', JSON.stringify(payload));
-    // mirror to sessionStorage for guards/routers that read this directly
-    if (payload.phone) sessionStorage.setItem('bw.session.phone', payload.phone);
+    localStorage.setItem("bw_session", JSON.stringify(payload));
+    if (payload.phone) sessionStorage.setItem("bw.session.phone", payload.phone);
   } catch {}
 
-  await waitForAuthSettle();
+  // Wait until Firebase emits the post-sign-in state
+  await new Promise<void>((resolve) => {
+    const unsub = onAuthStateChanged(auth, () => {
+      unsub();
+      resolve();
+    });
+  });
 
   // Let the app react (AppShell listens for this)
-  try { window.dispatchEvent(new Event('bw:auth:changed')); } catch {}
+  try {
+    window.dispatchEvent(new Event("bw:auth:changed"));
+  } catch {}
 
   return cred.user;
 }
@@ -145,6 +223,7 @@ export function clearPhoneSession() {
   delete w.confirmationResult;
 }
 
+/** Resolves after the first auth state emission (signed-in or out). */
 export async function waitForAuthSettle(): Promise<void> {
   await new Promise<void>((resolve) => {
     const unsub = onAuthStateChanged(auth, () => {
@@ -154,6 +233,19 @@ export async function waitForAuthSettle(): Promise<void> {
   });
 }
 
+/** Similar to waitForAuthSettle but returns the current user */
+export async function waitForAuthInit():
+Promise<User | null> {
+  return await new Promise<User | null>((resolve) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+}
+
 // keep existing alias used in your codebase
 export { confirmOtp as confirmPhoneCode };
-try { (window as any).bwAuth = auth; } catch{}
+
+// quick dev handle
+try { (window as any).bwAuth = auth; } catch {}

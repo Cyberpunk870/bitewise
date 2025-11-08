@@ -1,7 +1,7 @@
 // server/api/ingest.ts
-import { insert } from '../lib/db';
-import { ok, fail } from '../lib/response';
-import type { EventPayload, APIResponse } from '../types';
+import { insert } from '../../backend-lib/lib/db';
+import { ok, fail } from '../../backend-lib/lib/response';
+import type { EventPayload, APIResponse } from '../../backend-lib/types';
 
 export async function ingestEvents(events: EventPayload[]): Promise<APIResponse> {
   try {

@@ -1,0 +1,22 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": false,
+    "rootDir": ".",                            // key: relative to backend-lib/
+    "outDir": "../dist/backend-lib",           // compiles to dist/backend-lib/
+    "baseUrl": ".",                            // enable path resolution
+    "paths": {
+      "backend-api/*": ["../backend-api/*"],
+      "backend-lib/*": ["./*"]
+    }
+  },
+  "include": ["../backend-api", "./"],
+  "exclude": ["../dist", "../node_modules"]
+}

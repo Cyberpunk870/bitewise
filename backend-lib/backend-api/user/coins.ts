@@ -1,4 +1,3 @@
-// bitewise/server/api/user/coins.ts
 import { z } from "zod";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
@@ -6,15 +5,20 @@ const AddCoinsInput = z.object({
   uid: z.string().min(1),
   amount: z.number().int().min(1),
   reason: z.string().min(1), // e.g., "order_savings", "task_complete", "achievement"
-  meta: z.record(z.any()).optional(), // flexible payload for auditing
+  meta: z.record(z.string(),z.unknown()).optional(), // flexible payload for auditing
   request_id: z.string().optional(), // optional dedupe key
 });
 
-export async function addCoins(raw: unknown): Promise<{ ok: true; new_total: number; txn_id: string }> {
+export async function addCoins(
+  raw: unknown
+): Promise<{ ok: true; new_total: number; txn_id: string }> {
   const parsed = AddCoinsInput.parse(raw);
   const db = getFirestore();
+
   const userRef = db.collection("users").doc(parsed.uid);
-  const coinsRef = db.collection("coins_history").doc(parsed.request_id || db.collection("_tmp").doc().id);
+  const coinsRef = db
+    .collection("coins_history")
+    .doc(parsed.request_id || db.collection("_tmp").doc().id);
 
   const now = new Date().toISOString();
 
