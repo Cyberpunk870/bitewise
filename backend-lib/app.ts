@@ -1,6 +1,5 @@
 // backend-lib/app.ts
 // Express app (no .listen here). Used by both local dev and Vercel serverless.
-
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" }); // Note: Vercel ignores local files; envs must be set in dashboard
 
@@ -60,12 +59,8 @@ function loadServiceAccount(): ServiceAccount {
     }
   }
 
-  console.error(
-    "[server/app] no FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON present"
-  );
-  throw new Error(
-    "Missing Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON."
-  );
+  console.error("[server/app] no FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON present");
+  throw new Error("Missing Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON.");
 }
 
 // Initialise Admin exactly once
@@ -246,32 +241,10 @@ app.post("/api/push/test", async (req, res) => {
   }
 });
 
-// (all your other routes unchanged)
+/* ✅ MOUNT USER ROUTES (New addition) */
+app.use("/backend-api/user", userRoutes);
 
 console.log("[server/app] module loaded.");
-
-app.get("/backend-api/user/profile", async (req, res) => {
-  try {
-    const uid = (req as any).uid;
-    const result = await getUserProfile(uid);
-    res.json({ ok: true, result });
-  } catch (err) {
-    console.error("GET /user/profile error:", err);
-    res.status(500).json({ ok: false, error: "internal error" });
-  }
-});
-
-app.post("/backend-api/user/profile", async (req, res) => {
-  try {
-    const uid = (req as any).uid;
-    const input = req.body;
-    const result = await upsertBasicProfile(uid, input);
-    res.json({ ok: true, result });
-  } catch (err) {
-    console.error("POST /user/profile error:", err);
-    res.status(500).json({ ok: false, error: "internal error" });
-  }
-});
 
 /* ✅ FINAL EXPORT — FIXED */
 export default app;
