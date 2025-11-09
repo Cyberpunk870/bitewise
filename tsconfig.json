@@ -3,12 +3,19 @@
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "node",
-    "rootDir": ".",               // <- include all folders
+    "rootDir": ".",
     "outDir": "dist",
-    "typeRoots": ["./node_modules/@types", "./types"],
+    "typeRoots": ["./node_modules/@types", "./bitewise/types"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["backend-lib/**/*", "backend-api/**/*", "api/**/*", "src/vite-env.d.ts", "src/**/*", "types"]
+  "include": [
+    "backend-lib/**/*",
+    "backend-api/**/*",
+    "api/**/*",
+    "src/vite-env.d.ts",
+    "src/**/*",
+    "bitewise/types/**/*"
+  ]
 }

@@ -1,5 +1,7 @@
 // backend-lib/app.ts
 // Express app (no .listen here). Used by both local dev and Vercel serverless.
+/// <reference path="../types/express/index.d.ts" />
+
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" }); // Note: Vercel ignores local files; envs must be set in dashboard
 

@@ -1,5 +1,6 @@
 // bitewise/types/express/index.d.ts
-import { UserRecord } from "firebase-admin/auth";
+
+import type { UserRecord } from "firebase-admin/auth";
 
 declare global {
   namespace Express {

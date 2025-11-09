@@ -1,5 +1,4 @@
 // backend-lib/middleware/verifyAuth.ts
-
 import { Request, Response, NextFunction } from "express";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 
@@ -14,14 +13,17 @@ export async function verifyAuth(req: Request, res: Response, next: NextFunction
     }
 
     const idToken = match[1];
-
     const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(idToken, true); // `true` = check revocation
+    const decoded = await adminAuth.verifyIdToken(idToken, true);
 
-    // Attach UID to request object
-    (req as any).uid = decoded.uid;
+    // ✅ Attach user object (not just uid)
+    req.user = {
+      uid: decoded.uid,
+      email: decoded.email,
+      name: decoded.name
+    };
 
-    return next();
+    next();
   } catch (err: any) {
     console.error("[verifyAuth] Auth error:", err?.message || err);
     return res.status(401).json({ ok: false, error: "unauthorized" });
