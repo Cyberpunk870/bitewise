@@ -1,12 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
+    "module": "ESNext",
+    "moduleResolution": "node",
     "rootDir": ".",               // <- include all folders
     "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["backend-lib/**/*", "backend-api/**/*", "api/**/*"]
+  "include": ["backend-lib/**/*", "backend-api/**/*", "api/**/*", "src/vite-env/d/ts", "src/**/*"]
 }

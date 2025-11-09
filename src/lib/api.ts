@@ -1,10 +1,10 @@
 /** 
- * Central API layer for BiteWise frontend ↔ backend sync
- * Connects to backend routes defined in bitewise/server/index.ts
+ * Central API layer for BiteWise frontend ↔ backend sync 
+ * Connects to backend routes defined in bitewise/server/index.ts 
  */
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000/";
 
 // --- Wait for Firebase to restore the user (used by authHeader) ---
 async function waitForFirebaseUser(maxMs = 8000): Promise<User | null> {
@@ -72,45 +72,38 @@ export async function apiPost(path: string, body: unknown) {
 // 🧭 User Profile / Coins
 // ------------------------------------------------------------------
 export function getUserProfile() {
-  // server reads uid from bearer token; query param no longer needed/used
-  return apiGet(`/api/users/profile`);
+  return apiGet(`/user/profile`);
 }
 
-export function upsertProfile(profile: {
-  name?: string;
-  phone?: string;
-}) {
-  // server injects uid from token and ignores any uid field in body
-  return apiPost("/api/users/profile", profile);
+export function upsertProfile(profile: { name?: string; phone?: string; }) {
+  return apiPost(`/user/profile`, profile);
 }
 
 export function addCoins(amount: number, reason: string) {
-  // server injects uid from token
-  return apiPost("/api/users/coins/add", { amount, reason });
+  return apiPost(`/user/coins/add`, { amount, reason });
 }
 
 // ------------------------------------------------------------------
 // 🥇 Leaderboard / Achievements / Tasks
 // ------------------------------------------------------------------
 export function getLeaderboard() {
-  return apiGet("/api/leaderboard");
+  return apiGet(`/leaderboard`);
 }
 
 export function getAchievements() {
-  return apiGet("/api/achievements");
+  return apiGet(`/achievements`);
 }
 
 export function getTasks() {
-  return apiGet("/api/tasks");
+  return apiGet(`/tasks`);
 }
 
 // ------------------------------------------------------------------
 // 🏠 User Addresses
 // ------------------------------------------------------------------
 export async function getAddresses() {
-  // server reads uid from Authorization token
-  const res = await apiGet(`/api/user/addresses`);
-  return res.data || res.list || []; // normalize
+  const res = await apiGet(`/user/addresses`);
+  return res.data || res.list || [];
 }
 
 export function addAddress(address: {
@@ -121,20 +114,17 @@ export function addAddress(address: {
   lng: number;
   active?: boolean;
 }) {
-  // server reads uid from token and ignores any uid client tries to send
-  return apiPost("/api/user/addresses", address);
+  return apiPost(`/user/addresses`, address);
 }
 
 export function getNearest(lat: number, lng: number) {
-  // server reads uid from token
-  return apiGet(`/api/user/nearest?lat=${lat}&lng=${lng}`);
+  return apiGet(`/user/nearest?lat=${lat}&lng=${lng}`);
 }
 
 // ------------------------------------------------------------------
 // 🍔 Orders (Outbound + Completion + History)
 // ------------------------------------------------------------------
 export function markOutbound(payload: {
-  // NOTE: backend injects user_id from token, so we DO NOT send it.
   platform?: string;
   partner?: string;
   restaurant?: string;
@@ -144,25 +134,24 @@ export function markOutbound(payload: {
   otherTotal?: number;
   delta?: number;
 }) {
-  return apiPost("/api/orders/outbound", payload);
+  return apiPost(`/orders/outbound`, payload);
 }
 
 export function markCompletion(id: string, saved_amount: number) {
-  return apiPost("/api/orders/complete", { id, saved_amount });
+  return apiPost(`/orders/complete`, { id, saved_amount });
 }
 
 export function getOrders() {
-  // server reads uid from Authorization token
-  return apiGet(`/api/orders`);
+  return apiGet(`/orders`);
 }
 
 // ------------------------------------------------------------------
 // 🩺 Health / Debug endpoints
 // ------------------------------------------------------------------
 export function getHealth() {
-  return apiGet("/api/health");
+  return apiGet(`/health`);
 }
 
 export function getDebugInfo() {
-  return apiGet("/api/debug/ready");
+  return apiGet(`/debug/ready`);
 }

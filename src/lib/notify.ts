@@ -1,16 +1,12 @@
 /// <reference types="vite/client" />
-
 // src/lib/notify.ts
-// Unified Firebase Cloud Messaging + Local Fallback notification helper for BiteWise
-
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
 /* ----------------------------- Constants ----------------------------- */
-const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY; // public Web Push key from Firebase
-const API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined) || "http://localhost:3000";
+const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY;
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || "http://localhost:3000/";
 const LS_LAST_PUSH_TOKEN = "bw.push.token";
 
 /* ----------------------------- Firebase App ----------------------------- */
@@ -67,15 +63,7 @@ async function postJSON(path: string, body: unknown) {
 }
 
 /* ----------------------------- FCM registration ----------------------------- */
-/**
- * Call after successful login/unlock (already done from AppShell).
- * - Requests permission (if not granted)
- * - Retrieves FCM token with VAPID key
- * - Registers token with backend if new/changed
- * - Falls back to local marker if FCM unsupported
- */
 let inflightGetToken: Promise<string | null> | null = null;
-
 export async function initOrRefreshPushOnAuth(phoneHint?: string) {
   try {
     if (!(await isSupported())) {
@@ -87,20 +75,16 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
   } catch {
     return;
   }
-
   const user = getAuth().currentUser;
   if (!user) return;
 
-  // 1) Ask for permission
   try {
     await ensureNotifPermissionOrRoute();
     if (!("Notification" in window) || Notification.permission !== "granted") return;
   } catch {}
 
-  // 2) Get FCM token (idempotent + retry-once)
   const app = getFirebaseApp();
   const messaging = getMessaging(app);
-
   if (!VAPID_KEY) {
     console.warn("[notify] Missing VITE_FCM_VAPID_KEY; push will not register.");
     return;
@@ -117,18 +101,16 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
     inflightGetToken = inflightGetToken || doGet();
     let fcmToken = await inflightGetToken;
     inflightGetToken = null;
-
     if (!fcmToken) {
       await new Promise((r) => setTimeout(r, 800));
       fcmToken = await doGet();
     }
     if (!fcmToken) return;
 
-    // 3) If token changed, POST to backend
     const last = localStorage.getItem(LS_LAST_PUSH_TOKEN) || "";
     if (last !== fcmToken) {
       try {
-        await postJSON("/api/push/register", {
+        await postJSON(`/push/register`, {  // ✅ fixed here
           token: fcmToken,
           platform: "web",
           phone_hint: phoneHint || null,
@@ -140,7 +122,6 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
       }
     }
 
-    // 4) Foreground message hook (optional)
     try {
       onMessage(messaging, (payload) => {
         console.log("[notify] foreground message", payload);
@@ -159,15 +140,12 @@ export async function sendLocalTestNotification(
   try {
     if (!("Notification" in window)) return false;
     if (Notification.permission !== "granted") return false;
-
     if (canUsePush()) {
       try {
         const reg = await (navigator as any).serviceWorker.ready;
         await reg.showNotification(title, { body, icon: "/icons/icon-192.png" });
         return true;
-      } catch {
-        // fall back below
-      }
+      } catch {}
     }
     new Notification(title, { body, icon: "/icons/icon-192.png" });
     return true;
@@ -176,20 +154,16 @@ export async function sendLocalTestNotification(
   }
 }
 
-/* ----------------------------- Generic local notification ----------------------------- */
 export async function sendLocalNotification(title: string, body: string): Promise<boolean> {
   try {
     if (!("Notification" in window)) return false;
     if (Notification.permission !== "granted") return false;
-
     if (canUsePush()) {
       try {
         const reg = await (navigator as any).serviceWorker.ready;
         await reg.showNotification(title, { body, icon: "/icons/icon-192.png" });
         return true;
-      } catch {
-        // fallback to plain Notification
-      }
+      } catch {}
     }
     new Notification(title, { body, icon: "/icons/icon-192.png" } as any);
     return true;
