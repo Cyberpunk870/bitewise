@@ -5,9 +5,10 @@
     "moduleResolution": "node",
     "rootDir": ".",               // <- include all folders
     "outDir": "dist",
+    "typeRoots": ["./node_modules/@types", "./types"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["backend-lib/**/*", "backend-api/**/*", "api/**/*", "src/vite-env/d/ts", "src/**/*"]
+  "include": ["backend-lib/**/*", "backend-api/**/*", "api/**/*", "src/vite-env.d.ts", "src/**/*", "types"]
 }
