@@ -1,30 +1,29 @@
-// bitewise/server/middleware/verifyAuth.ts
+// backend-lib/middleware/verifyAuth.ts
+
 import { Request, Response, NextFunction } from "express";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 
 export async function verifyAuth(req: Request, res: Response, next: NextFunction) {
   try {
-    const authz = req.headers.authorization || "";
-    const match = authz.match(/^Bearer (.+)$/i);
-    const idToken = match ? match[1] : "";
+    const authHeader = req.headers.authorization || "";
+    const match = authHeader.match(/^Bearer (.+)$/);
 
-    if (!idToken) {
-      return res
-        .status(401)
-        .json({ ok: false, error: "missing auth token" });
+    if (!match || !match[1]) {
+      console.warn("[verifyAuth] Missing or invalid auth token");
+      return res.status(401).json({ ok: false, error: "missing or invalid auth token" });
     }
 
-    // Verify Firebase ID token using Admin SDK
-    const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(idToken, true);
+    const idToken = match[1];
 
-    // Attach UID for downstream handlers
+    const adminAuth = getAdminAuth();
+    const decoded = await adminAuth.verifyIdToken(idToken, true); // `true` = check revocation
+
+    // Attach UID to request object
     (req as any).uid = decoded.uid;
 
     return next();
-  } catch (err) {
-    return res
-      .status(401)
-      .json({ ok: false, error: "unauthorized" });
+  } catch (err: any) {
+    console.error("[verifyAuth] Auth error:", err?.message || err);
+    return res.status(401).json({ ok: false, error: "unauthorized" });
   }
 }

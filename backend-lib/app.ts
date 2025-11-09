@@ -8,6 +8,7 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
 import morgan from "morgan";
+import userRoutes from "./backend-api/user";
 
 // --- Firebase Admin (lazy init) ---
 import {
@@ -248,6 +249,29 @@ app.post("/api/push/test", async (req, res) => {
 // (all your other routes unchanged)
 
 console.log("[server/app] module loaded.");
+
+app.get("/backend-api/user/profile", async (req, res) => {
+  try {
+    const uid = (req as any).uid;
+    const result = await getUserProfile(uid);
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error("GET /user/profile error:", err);
+    res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+app.post("/backend-api/user/profile", async (req, res) => {
+  try {
+    const uid = (req as any).uid;
+    const input = req.body;
+    const result = await upsertBasicProfile(uid, input);
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error("POST /user/profile error:", err);
+    res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
 
 /* ✅ FINAL EXPORT — FIXED */
 export default app;
