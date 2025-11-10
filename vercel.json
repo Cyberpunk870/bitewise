@@ -20,7 +20,7 @@
     },
     {
       "src": "/backend-api/(.*)",
-      "dest": "api/[[...all]].ts"
+      "dest": "api/[...all].ts"
     }
   ]
 }
