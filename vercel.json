@@ -4,7 +4,9 @@
     {
       "src": "package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+      "config": {
+        "distDir": "dist"
+      }
     },
     {
       "src": "api/[[...all]].ts",
@@ -31,7 +33,7 @@
       "dest": "/api/[[...all]].ts"
     },
     {
-      "src": "/backend-api/(.*)",  // ✅ ADD THIS BLOCK
+      "src": "/backend-api/(.*)",
       "dest": "/api/[[...all]].ts"
     },
     {
