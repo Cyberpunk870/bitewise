@@ -1,9 +1,11 @@
-/// bitewise/server/api/user/profile.ts
+// backend-lib/backend-api/user/profile.ts
+
+import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
 
-/**
- * Lightweight shape for achievements in profile panel.
- */
+const router = Router();
+
+/** Lightweight shape for achievements in profile panel. */
 type AchievementLite = {
   id: string;
   code: string;
@@ -13,32 +15,52 @@ type AchievementLite = {
 
 export type ProfileOut = {
   uid: string;
-
-  // identity-ish
   name?: string;
   phone?: string;
-
   total_savings: number;
   total_coins: number;
-
   achievements: AchievementLite[];
-  rank: number | null; // weekly rank in "global"
+  rank: number | null;
 };
 
-/**
- * Produce the current user's dashboard profile.
- * - Ensures /users/{uid} doc exists (so totals never show undefined)
- * - Pulls last ~20 achievements
- * - Computes current weekly rank by scanning leaderboard
- */
-export async function getUserProfile(
-  uid: string
-): Promise<{ ok: true; profile: ProfileOut }> {
-  const db = getFirestore();
+/** GET /backend-api/user/profile — current user's profile */
+router.get("/", async (req: any, res) => {
+  try {
+    const uid = req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
 
-  // Ensure user doc exists
+    const result = await getUserProfile(uid);
+    return res.json(result);
+  } catch (e: any) {
+    console.error("GET /profile failed:", e);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+/** POST /backend-api/user/profile — update name/phone */
+router.post("/", async (req: any, res) => {
+  try {
+    const uid = req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+
+    const input = req.body;
+    const result = await upsertBasicProfile(uid, input);
+    return res.json(result);
+  } catch (e: any) {
+    console.error("POST /profile failed:", e);
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+/* -------------------------------------------------------------------------- */
+/*                              Helper Functions                              */
+/* -------------------------------------------------------------------------- */
+
+export async function getUserProfile(uid: string): Promise<{ ok: true; profile: ProfileOut }> {
+  const db = getFirestore();
   const userRef = db.collection("users").doc(uid);
   const firstSnap = await userRef.get();
+
   if (!firstSnap.exists) {
     const now = new Date().toISOString();
     await userRef.set(
@@ -55,13 +77,11 @@ export async function getUserProfile(
 
   const userSnap = await userRef.get();
   const user = userSnap.data() || {};
-
   const total_savings = Number(user.total_savings || 0);
   const total_coins = Number(user.total_coins || 0);
   const name = user.name ? String(user.name) : undefined;
   const phone = user.phone ? String(user.phone) : undefined;
 
-  // Achievements (latest 20)
   const achSnap = await db
     .collection("achievements")
     .where("user_id", "==", uid)
@@ -72,14 +92,13 @@ export async function getUserProfile(
   const achievements: AchievementLite[] = achSnap.docs.map((d) => {
     const a = d.data() as any;
     return {
-      id: (a.id as string) ?? d.id,
+      id: a.id ?? d.id,
       code: String(a.code || ""),
       points: Number(a.points || 0),
       earned_at: String(a.earned_at || a.created_at || ""),
     };
   });
 
-  // Leaderboard rank this week (global pool).
   const weekId = currentWeekId();
   const lbSnap = await db
     .collection("leaderboard")
@@ -113,21 +132,19 @@ export async function getUserProfile(
   };
 }
 
-/**
- * Upsert name/phone (no overwrite with empty values).
- */
 export async function upsertBasicProfile(
   uid: string,
   input: { name?: string; phone?: string }
 ) {
   const db = getFirestore();
   const now = new Date().toISOString();
-
   const update: Record<string, any> = { updated_at: now };
-  if (input.name && input.name.trim()) {
+
+  if (input.name?.trim()) {
     update.name = input.name.trim();
   }
-  if (input.phone && input.phone.trim()) {
+
+  if (input.phone?.trim()) {
     update.phone = input.phone.trim();
   }
 
@@ -135,9 +152,6 @@ export async function upsertBasicProfile(
   return { ok: true };
 }
 
-/**
- * Stable, index-friendly key like 2025-W42
- */
 function currentWeekId(): string {
   const now = new Date();
   const jan1 = new Date(now.getFullYear(), 0, 1);
@@ -145,4 +159,10 @@ function currentWeekId(): string {
   const week = Math.ceil((days + jan1.getDay() + 1) / 7);
   return `${now.getFullYear()}-W${String(week).padStart(2, "0")}`;
 }
-``
+
+/* -------------------------------------------------------------------------- */
+/*                               Default Export                               */
+/* -------------------------------------------------------------------------- */
+
+// ✅ Ensure default export is at the very bottom and only once
+export default router;
