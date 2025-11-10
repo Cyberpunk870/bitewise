@@ -1,26 +1,22 @@
 {
-  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/[...all].ts" }
+  ],
   "builds": [
     {
-      "src": "api/[[...all]].ts",
-      "use": "@vercel/node",
+      "src": "api/[...all].ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "src/index.html",
+      "use": "@vercel/static-build",
       "config": {
-        "includeFiles": [
-          "backend-lib/**",
-          "backend-api/**",
-          "backend-lib/sa*.json"
-        ]
+        "distDir": "dist"
       }
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "api/[...all].ts"
-    },
-    {
-      "src": "/backend-api/(.*)",
-      "dest": "api/[...all].ts"
-    }
+    { "src": "/api/(.*)", "dest": "/api/[...all].ts" },
+    { "src": "/(.*)", "dest": "/src/$1" }
   ]
 }
