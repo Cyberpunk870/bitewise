@@ -4,9 +4,12 @@
     "module": "ESNext",
     "moduleResolution": "node",
     "jsx": "react-jsx",
-    "rootDir": ".",                // ✅ This ensures all files in project are included
+    "rootDir": ".",              // This includes everything under the project root
     "outDir": "dist",
-    "typeRoots": ["./node_modules/@types", "./types"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types"
+    ],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
