@@ -4,7 +4,8 @@
  */
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000/";
+// ✅ FIXED: Correct base depending on dev/prod
+const BASE = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
 
 // --- Wait for Firebase to restore the user (used by authHeader) ---
 async function waitForFirebaseUser(maxMs = 8000): Promise<User | null> {
@@ -23,8 +24,6 @@ async function waitForFirebaseUser(maxMs = 8000): Promise<User | null> {
         try { unsub(); } catch {}
         resolve(u ?? null);
       },
-      // @ts-expect-error onlyOnce is ignored if not supported
-      { onlyOnce: true }
     );
   });
 }

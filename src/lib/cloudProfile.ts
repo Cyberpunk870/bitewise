@@ -1,13 +1,9 @@
 // src/lib/cloudProfile.ts
-// Unified cloud sync layer using backend APIs (no Firestore REST calls)
-
 import { getActivePhone, loadProfileByPhone, saveProfile, type Profile } from './profileStore';
 import { getUserProfile, upsertProfile } from './api';
 import { getAuth } from 'firebase/auth';
 
 const USE_CLOUD = import.meta.env.VITE_USE_FIRESTORE === '1';
-
-/* -------------------------- PUSH (debounced) -------------------------- */
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let lastPushedSnapshot = '';
@@ -38,24 +34,23 @@ export async function pushActiveToCloud(): Promise<void> {
     const local = loadProfileByPhone(phone);
     if (!local) return;
     const snapshot = stableSnapshot(local);
-    if (snapshot === lastPushedSnapshot) return; // no change
+    if (snapshot === lastPushedSnapshot) return;
 
     const doPush = async () => {
       try {
         await upsertProfile({
           phone: local.phone,
-          name: local.name &&
-          local.name.trim().toLowerCase() !== "guest"
-          ? local.name.trim()
-          :undefined,
+          name:
+            local.name &&
+            local.name.trim().toLowerCase() !== "guest"
+              ? local.name.trim()
+              : undefined,
         });
         lastPushedSnapshot = snapshot;
       } catch (e) {
         console.warn('[cloudProfile] pushActiveToCloud failed', e);
       }
     };
-
-    // debounce 500ms to absorb quick successive updates
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(doPush, 500);
   } catch (err) {
@@ -63,18 +58,14 @@ export async function pushActiveToCloud(): Promise<void> {
   }
 }
 
-/* --------------------------- HYDRATE (pull) --------------------------- */
-
 export async function hydrateActiveFromCloud(): Promise<boolean> {
   try {
     if (!USE_CLOUD) return false;
     if (!getAuth().currentUser) return false;
     const phone = getActivePhone();
     if (!phone) return false;
-
     const remote = await getUserProfile();
     if (!remote?.profile) return false;
-
     const local = loadProfileByPhone(phone) || ({ phone } as Profile);
     const merged: Profile = {
       ...local,
@@ -83,7 +74,6 @@ export async function hydrateActiveFromCloud(): Promise<boolean> {
       passkey: local.passkey,
       passkeyMeta: local.passkeyMeta,
     };
-
     saveProfile(merged);
     lastPushedSnapshot = stableSnapshot(merged);
     return true;
