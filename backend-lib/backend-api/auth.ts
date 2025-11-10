@@ -1,4 +1,4 @@
-// bitewise/server/api/auth.ts
+// bitewise/backend-lib/backend-api/auth.ts
 
 import { getAuth } from "firebase-admin/auth";
 

@@ -14,9 +14,5 @@
         "distDir": "dist"
       }
     }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/[...all].ts" },
-    { "src": "/(.*)", "dest": "/src/$1" }
   ]
 }

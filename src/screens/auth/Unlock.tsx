@@ -1,5 +1,4 @@
 // src/screens/auth/Unlock.tsx
-
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hasLocalPasskey, verifyLocalPasskey } from '../../lib/passkeyLocal';
@@ -15,7 +14,6 @@ export default function Unlock() {
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Best candidate phone to unlock for
   const phone = useMemo(() => {
     try {
       const fromSession = sessionStorage.getItem('bw.session.phone') || '';
@@ -35,11 +33,9 @@ export default function Unlock() {
   );
 
   useEffect(() => {
-    // Autofocus for nice UX
     setTimeout(() => inputRef.current?.focus(), 40);
   }, []);
 
-  // compute safe return route
   function computeBackRoute(): string {
     try {
       const backRaw =
@@ -60,7 +56,6 @@ export default function Unlock() {
 
   async function onUnlock(e: React.FormEvent) {
     e.preventDefault();
-
     if (!phone) {
       toast.error('No account hint found. Please log in again.');
       nav('/onboarding', { replace: true });
@@ -74,23 +69,22 @@ export default function Unlock() {
 
     setBusy(true);
     try {
-      // 1) Local passkey verification
       const ok = await verifyLocalPasskey(phone, p);
       if (!ok) {
         toast.error('Incorrect passkey. Try again.');
         return;
       }
 
-      // 2) Ask backend for a Firebase custom token
       let customToken: string | null = null;
       try {
-        const base = import.meta.env.DEV ? 'http://localhost:3000' : '';
-        const resp = await fetch(base + '/api/auth/mintCustomToken', {
+        const base = import.meta.env.DEV
+          ? 'http://localhost:3000'
+          : '';
+        const resp = await fetch(base + '/api/backend-api/auth/mintCustomToken', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone }),
         });
-
         if (resp.ok) {
           const data = await resp.json();
           if (data?.ok && data?.token) {
@@ -105,7 +99,6 @@ export default function Unlock() {
         console.warn('mintCustomToken fetch error', err);
       }
 
-      // 3) Silently re-authenticate Firebase with that token
       if (customToken) {
         try {
           const auth = getAuth();
@@ -118,7 +111,6 @@ export default function Unlock() {
         console.warn('No custom token received; continuing without Firebase sign-in');
       }
 
-      // 4) Restore local session hints
       try {
         sessionStorage.setItem('bw.session.phone', phone);
         localStorage.setItem('bw.lastPhone', phone);
@@ -126,17 +118,13 @@ export default function Unlock() {
         sessionStorage.removeItem('bw.requirePermRecheck');
       } catch {}
 
-      // 5) Hydrate profile from backend NOW so UI shows correct name/coins/etc.
       try {
         await hydrateActiveFromCloud();
       } catch (err) {
         console.warn('hydrateActiveFromCloud after unlock failed', err);
       }
 
-      // 6) Emit global auth event (balances, headers, push setup listeners, etc.)
       emit('bw:auth:changed', null);
-
-      // 7) Redirect to last known route
       const back = computeBackRoute();
       nav(back, { replace: true });
     } catch (err) {

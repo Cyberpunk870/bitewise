@@ -4,9 +4,12 @@
     "module": "ESNext",
     "moduleResolution": "node",
     "jsx": "react-jsx",
-    "rootDir": ".",
+    "rootDir": ".",                      // Ensure TS picks up all files correctly
     "outDir": "dist",
-    "typeRoots": ["./node_modules/@types", "./bitewise/types"],
+    "typeRoots": [
+      "./node_modules/@types",
+      "./bitewise/types"
+    ],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
@@ -15,8 +18,12 @@
     "backend-lib/**/*",
     "backend-api/**/*",
     "api/**/*",
-    "src/vite-env.d.ts",
     "src/**/*",
+    "vite-env.d.ts",
     "bitewise/types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
   ]
 }

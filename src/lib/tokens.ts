@@ -1,6 +1,7 @@
 // src/lib/tokens.ts
 import { emit } from './events';
 import { getUserProfile as apiGetUserProfile } from './api';
+import { getAuth } from 'firebase/auth';
 
 const KEY = 'bw.tokens';
 
@@ -62,6 +63,7 @@ export function addTokens(delta: number) {
  * Returns the synced total, or null on failure.
  */
 export async function syncTokensFromCloud(uid?: string): Promise<number | null> {
+  if (!getAuth().currentUser) return null;
   try {
     const res = await apiGetUserProfile(); // no uid needed for current user
     const total = Number(res?.profile?.total_coins ?? NaN);
