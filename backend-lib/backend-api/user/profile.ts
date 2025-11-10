@@ -145,3 +145,4 @@ function currentWeekId(): string {
   const week = Math.ceil((days + jan1.getDay() + 1) / 7);
   return `${now.getFullYear()}-W${String(week).padStart(2, "0")}`;
 }
+``
