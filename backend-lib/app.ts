@@ -244,7 +244,7 @@ app.post("/api/push/test", async (req, res) => {
 });
 
 /* ✅ MOUNT USER ROUTES (New addition) */
-app.use("/api/user", userRoutes);
+app.use("/backend-api/user", userRoutes);
 
 console.log("[server/app] module loaded.");
 
