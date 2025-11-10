@@ -145,7 +145,7 @@ app.get("/api/ready", (_req, res) => {
 });
 
 /* ----------------- Auth: mintCustomToken for passkey unlock ----------------- */
-app.post("/api/auth/mintCustomToken", async (req, res) => {
+app.post("/backend-api/auth/mintCustomToken", async (req, res) => {
   try {
     console.log("[server/app] /api/auth/mintCustomToken hit");
     const allow = process.env.ALLOW_DEV_PASSKEY_REAUTH;
