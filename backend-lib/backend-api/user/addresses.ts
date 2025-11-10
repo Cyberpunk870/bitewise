@@ -2,11 +2,14 @@
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
+import { Router } from "express";
 
 /**
  * Payload we accept from frontend.
  * We allow optional id for "Make active" updates.
  */
+const router = Router();
+
 const AddressInput = z.object({
   id: z.string().optional(), // upsert
   label: z.string().min(1),
@@ -249,3 +252,4 @@ function haversineMeters(
 
   return R * c;
 }
+export default router;

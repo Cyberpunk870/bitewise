@@ -1,12 +1,12 @@
 // backend-lib/backend-api/user/index.ts
 
 import { Router } from "express";
-import profile from "./profile";
-import addresses from "./addresses";
+import profileRouter from "./profile";
+import addressesRouter from "./addresses";
 
 const router = Router();
 
-router.use("/profile", profile);
-router.use("/addresses", addresses);
+router.use("/profile", profileRouter);
+router.use("/addresses", addressesRouter);
 
 export default router;
