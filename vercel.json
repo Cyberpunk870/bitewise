@@ -33,10 +33,6 @@
       "dest": "/api/[[...all]].ts"
     },
     {
-      "src": "/backend-api/(.*)",
-      "dest": "/api/[[...all]].ts"
-    },
-    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
