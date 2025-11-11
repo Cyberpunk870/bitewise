@@ -4,13 +4,13 @@
   "version": "0.0.0",
   "type": "commonjs",
   "engines": {
-    "node": "20.x"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "dev": "vite",
-    "build:server": "tsc -p backend-lib/tsconfig.server.json --pretty false || true",
+    "build:server": "tsc -P backend-lib/tsconfig.server.json --pretty false || true",
     "build": "npm run build:server && vite build",
-    "start": "node backend-lib/dist/app.js",
+    "start": "node dist/backend-lib/app.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "vercel-deploy": "npm run build && vercel --prod"
@@ -20,7 +20,7 @@
     "body-parser": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0",
+    "express": "^5.0.1",
     "firebase": "^12.5.0",
     "firebase-admin": "^13.5.0",
     "framer-motion": "^12.23.12",
@@ -34,13 +34,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@types/body-parser": "^1.19.5",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@types/google.maps": "^3.58.1",
     "@types/morgan": "^1.9.10",
     "@types/node": "^24.10.0",
-    "@types/react": "^19.1.9",
-    "@types/react-dom": "^19.1.7",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@vercel/node": "^2.15.10",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.21",
@@ -51,7 +52,7 @@
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
+    "typescript": "^5.7.2",
     "typescript-eslint": "^8.39.0",
     "vite": "^5.4.10",
     "vite-plugin-pwa": "^1.0.2"
