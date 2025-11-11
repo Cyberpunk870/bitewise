@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "node",
     "jsx": "react-jsx",
-    "rootDir": ".",              // This includes everything under the project root
+    "rootDir": ".",
     "outDir": "dist",
     "typeRoots": [
       "./node_modules/@types",

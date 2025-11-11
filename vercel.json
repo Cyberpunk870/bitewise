@@ -12,11 +12,8 @@
       }
     },
     {
-      "src": "index.html",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+      "src": "dist/index.html",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
