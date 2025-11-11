@@ -1,5 +1,8 @@
 // bitewise/server/api/leaderboard.ts
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import express from "express";
+
+const router = express.Router();
 
 export type LeaderboardRow = {
   id: string;        // user_id + week_id + region
@@ -63,3 +66,4 @@ export async function getLeaderboard(opts?: { week_id?: string; region?: string;
   const data = snap.docs.map((d) => d.data() as LeaderboardRow);
   return { ok: true, week_id: wk, region, data };
 }
+export default router;

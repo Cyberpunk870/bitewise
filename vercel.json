@@ -3,27 +3,17 @@
   "builds": [
     {
       "src": "api/[...all].ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "backend-lib/**",
-          "backend-api/**"
-        ]
-      }
+      "use": "@vercel/node"
     },
     {
-      "src": "dist/index.html",
-      "use": "@vercel/static"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist" }
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "api/[...all].ts"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
+    { "src": "/api/(.*)", "dest": "/api/[...all].ts" },
+    { "src": "/backend-api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }

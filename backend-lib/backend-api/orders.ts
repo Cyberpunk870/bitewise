@@ -4,11 +4,13 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { randomUUID } from "crypto";
 import { bumpScore } from "./leaderboard";
 import { ensureAchievement } from "./achievements";
+import express from "express";
 
 /**
  * We accept a flexible payload because frontend can evolve.
  * We normalize it here before writing Firestore.
  */
+const router = express.Router();
 const Inbound = z.object({
   user_id: z.string().min(1),
   platform: z.string().optional(),
@@ -272,3 +274,4 @@ async function completedCountFor(user_id: string) {
     .get();
   return snap.size;
 }
+export default router;

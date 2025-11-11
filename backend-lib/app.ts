@@ -1,15 +1,14 @@
 // backend-lib/app.ts
 // Express app (no .listen here). Used by both local dev and Vercel serverless.
-/// <reference path="../types/express/index.d.ts" />
 
+/// <reference path="../types/express/index.d.ts" />
 import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" }); // Note: Vercel ignores local files; envs must be set in dashboard
+dotenv.config({ path: ".env.local" }); // Vercel ignores .env.local; envs must be set in dashboard
 
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
 import morgan from "morgan";
-import userRoutes from "./backend-api/user";
 
 // --- Firebase Admin (lazy init) ---
 import {
@@ -23,9 +22,16 @@ import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
 import fs from "fs";
 
+import userRoutes from "./backend-api/user";
+import orders from "./backend-api/orders";
+import leaderboard from "./backend-api/leaderboard";
+import achievements from "./backend-api/achievements";
+import tasks from "./backend-api/tasks";
+import { verifyAuth } from "./middleware/verifyAuth";
+
 console.log("[server/app] module loading…");
 
-/* -------------------- Helpers: load credentials & lazy init -------------------- */
+/* -------------------- Firebase credential loader -------------------- */
 function loadServiceAccount(): ServiceAccount {
   const path = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
   if (path && fs.existsSync(path)) {
@@ -61,14 +67,17 @@ function loadServiceAccount(): ServiceAccount {
     }
   }
 
-  console.error("[server/app] no FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON present");
-  throw new Error("Missing Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON.");
+  console.error(
+    "[server/app] no FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON present"
+  );
+  throw new Error(
+    "Missing Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON."
+  );
 }
 
-// Initialise Admin exactly once
+/* -------------------- Firebase lazy init -------------------- */
 function ensureAdmin() {
   const before = getApps().length;
-  console.log("[server/app] ensureAdmin() called; apps before =", before);
   if (!before) {
     const sa = loadServiceAccount();
     initAdmin({ credential: cert(sa) });
@@ -76,10 +85,9 @@ function ensureAdmin() {
   }
 }
 
-// Express middleware that guarantees Admin is ready
+/* -------------------- Middleware -------------------- */
 function ensureAdminMiddleware(_req: Request, _res: Response, next: NextFunction) {
   try {
-    console.log("[server/app] ensureAdminMiddleware enter");
     ensureAdmin();
   } catch (e) {
     console.error("[server/app] ensureAdminMiddleware error:", e);
@@ -87,45 +95,29 @@ function ensureAdminMiddleware(_req: Request, _res: Response, next: NextFunction
   next();
 }
 
-/* -------------------------------- App & middleware ------------------------------- */
+/* -------------------- App setup -------------------- */
 const app = express();
-
-// ✅ FIX: Enhanced CORS configuration
 const allowedOrigins = [
   "http://localhost:5173",
   "https://bitewise-five.vercel.app",
-  "https://bitewise.vercel.app" // optional alias in case of Vercel preview URLs
+  "https://bitewise.vercel.app",
 ];
-
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.warn("[server/app] Blocked by CORS:", origin);
-        callback(new Error("Not allowed by CORS"));
-      }
+      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+      else callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
   })
 );
-
 app.use(bodyParser.json());
-app.use(morgan("tiny")); // request logging
+app.use(morgan("tiny"));
 
-app.get("/", (_req, res) => {
-  res.json({ ok: true, message: "Welcome to BiteWise API" });
-});
-
-/* --------------------------- Health & Readiness --------------------------- */
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    status: "server running",
-    admin_ready: getApps().length > 0,
-  });
-});
+/* -------------------- Health -------------------- */
+app.get("/api/health", (_req, res) =>
+  res.json({ ok: true, status: "server running", admin_ready: getApps().length > 0 })
+);
 
 app.get("/api/ready", (_req, res) => {
   try {
@@ -134,37 +126,26 @@ app.get("/api/ready", (_req, res) => {
     res.status(ready ? 200 : 503).json({
       ok: ready,
       admin_ready: ready,
-      data_backend: process.env.DATA_BACKEND ?? "firestore",
-      write_strategy: process.env.WRITE_STRATEGY ?? "primary-only",
-      has_sa_path: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_PATH),
       has_sa_json: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON),
     });
   } catch (e: any) {
-    res.status(503).json({ ok: false, admin_ready: false, error: String(e?.message || e) });
+    res.status(503).json({ ok: false, error: String(e?.message || e) });
   }
 });
 
-/* ----------------- Auth: mintCustomToken for passkey unlock ----------------- */
-app.post("/backend-api/auth/mintCustomToken", async (req, res) => {
+/* -------------------- Auth Mint Token -------------------- */
+app.post("/api/auth/mintCustomToken", async (req, res) => {
   try {
     console.log("[server/app] /api/auth/mintCustomToken hit");
-    const allow = process.env.ALLOW_DEV_PASSKEY_REAUTH;
-    if (!allow) {
-      console.warn("[server/app] passkey reauth disabled");
-      return res.status(403).json({ ok: false, error: "passkey reauth disabled" });
-    }
     ensureAdmin();
     const phone = String(req.body?.phone || "").trim();
-    if (!phone) {
-      return res.status(400).json({ ok: false, error: "phone required" });
-    }
+    if (!phone) return res.status(400).json({ ok: false, error: "phone required" });
+
     const db = getFirestore();
     const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
-    if (snap.empty) {
-      return res.status(404).json({ ok: false, error: "no such user" });
-    }
-    const doc = snap.docs[0];
-    const uid = doc.id;
+    if (snap.empty) return res.status(404).json({ ok: false, error: "no such user" });
+
+    const uid = snap.docs[0].id;
     const token = await getAdminAuth().createCustomToken(uid, { phone });
     return res.json({ ok: true, token });
   } catch (err: any) {
@@ -173,80 +154,39 @@ app.post("/backend-api/auth/mintCustomToken", async (req, res) => {
   }
 });
 
-/* ---------------- From here: require Admin + Firebase Auth ---------------- */
-import { verifyAuth } from "./middleware/verifyAuth";
+/* -------------------- Secure Middleware -------------------- */
 app.use("/api", ensureAdminMiddleware);
 app.use("/api", verifyAuth);
 
-/* --------------------------------- Route impls --------------------------------- */
-import { ingestEvents } from "./backend-api/ingest";
-import { getTasks } from "./backend-api/tasks";
-import { getAchievements } from "./backend-api/achievements";
-import { getLeaderboard } from "./backend-api/leaderboard";
-import { getAddresses, saveAddress, nearestFor } from "./backend-api/user/addresses";
-import { getOrderEvents, markOutbound, markCompletion } from "./backend-api/orders";
-import { getUserProfile, upsertBasicProfile } from "./backend-api/user/profile";
-import { addCoins } from "./backend-api/user/coins";
+/* -------------------- Route Mounting -------------------- */
+app.use("/api/user", userRoutes);
+app.use("/api/orders", orders);
+app.use("/api/leaderboard", leaderboard);
+app.use("/api/achievements", achievements);
+app.use("/api/tasks", tasks);
 
-/* -------------------------- Push Registration -------------------------- */
+/* -------------------- Push Registration -------------------- */
 app.post("/api/push/register", async (req, res) => {
   try {
-    console.log("[server/app] /api/push/register");
     const uid = (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     const token = String(req.body?.token || "").trim();
-    const platform = String(req.body?.platform || "web");
     if (!token) return res.status(400).json({ ok: false, error: "token required" });
-    const db = getFirestore();
-    const docRef = db.collection("users").doc(uid).collection("devices").doc(token);
-    await docRef.set(
-      {
-        token,
-        platform,
-        updated_at: new Date().toISOString(),
-        active: true,
-      },
-      { merge: true }
-    );
-    return res.json({ ok: true });
-  } catch (err: any) {
-    console.error("push/register error", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
-  }
-});
 
-app.post("/api/push/test", async (req, res) => {
-  try {
-    console.log("[server/app] /api/push/test");
-    const uid = (req as any).uid;
-    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     const db = getFirestore();
-    const snap = await db
+    await db
       .collection("users")
       .doc(uid)
       .collection("devices")
-      .orderBy("updated_at", "desc")
-      .limit(1)
-      .get();
-    if (snap.empty) return res.status(404).json({ ok: false, error: "no device" });
-    const token = snap.docs[0].data().token as string;
-    const resp = await getMessaging().send({
-      token,
-      notification: { title: "🍔 BiteWise", body: "Push is working!" },
-      data: { kind: "test" },
-    });
-    return res.json({ ok: true, resp });
-  } catch (err: any) {
-    const info = err?.errorInfo || err?.code || err?.message || String(err);
-    console.error("[push/test] send error", info, err?.stack || "");
-    return res.status(500).json({ ok: false, error: info });
+      .doc(token)
+      .set({ token, updated_at: new Date().toISOString(), active: true }, { merge: true });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("push/register error", err);
+    res.status(500).json({ ok: false, error: "internal error" });
   }
 });
 
-/* ✅ MOUNT USER ROUTES (New addition) */
-app.use("/backend-api/user", userRoutes);
-
 console.log("[server/app] module loaded.");
-
-/* ✅ FINAL EXPORT — FIXED */
 export default app;
