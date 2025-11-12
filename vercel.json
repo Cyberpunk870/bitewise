@@ -5,7 +5,10 @@
       "src": "api/[...all].ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": "firebase/service-account.json"
+        "includeFiles": [
+          "firebase/service-account.json",
+          "dist/backend-lib/**"
+        ]
       }
     },
     {
