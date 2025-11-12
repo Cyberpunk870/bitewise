@@ -10,6 +10,7 @@
     "dev": "vite",
     "build:server": "tsc -P backend-lib/tsconfig.server.json --pretty false || true",
     "build": "npm run build:server && vite build",
+    "vercel-build": "npm run build",
     "start": "node dist/backend-lib/app.js",
     "lint": "eslint .",
     "preview": "vite preview",
