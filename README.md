@@ -1,69 +1,64 @@
-# React + TypeScript + Vite
+# BiteWise Web + API
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Single repo for the BiteWise React frontend (Vite) and the Firebase-backed Express API that powers it. The frontend and backend run in the same Vercel project so that `https://<app>/api/*` always resolves to the serverless bundle generated from `backend-lib`.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js ≥ 20
+- npm ≥ 10
+- Firebase project with:
+  - Web config (API key, sender id, etc.)
+  - Service-account credentials (JSON)
+  - Firestore + Cloud Messaging enabled
 
-## Expanding the ESLint configuration
+## Environment Variables
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Copy `.env.example` to `.env.local` for local development. The same keys must be added to your Vercel project (Production + Preview environments).
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Variable | Purpose |
+| --- | --- |
+| `VITE_FIREBASE_*` | Frontend Firebase SDK config (keep prod + local in sync). |
+| `VITE_GOOGLE_MAPS_API_KEY` | Required for Maps SDK features. |
+| `VITE_USE_FIRESTORE` | `1` to enable profile syncing. |
+| `VITE_API_BASE` | Use `/api` in prod (defaults to `/api` automatically). |
+| `VITE_FCM_VAPID_KEY` | Web push key from Firebase console (Project Settings → Cloud Messaging). |
+| `CLIENT_ORIGINS` | Comma-separated list of web origins allowed to hit the backend (include localhost, preview, and prod domains). |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` or `FIREBASE_SERVICE_ACCOUNT_JSON` | Backend credentials so Firebase Admin can mint/verify tokens & write to Firestore. |
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+### Vercel env tips
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+vercel env add VITE_FIREBASE_API_KEY production
+vercel env add VITE_FIREBASE_API_KEY preview
+...repeat for the rest...
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Set `VITE_API_BASE` to `/api` (or leave unset), and set `CLIENT_ORIGINS` to the full HTTPS origins of your preview/prod deployments. The backend also auto-allows `https://${VERCEL_URL}`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Local Development
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+cp .env.example .env.local   # fill in real credentials
+npm run dev:server           # terminal A – Express + Firebase Admin on http://localhost:3000
+npm run dev                  # terminal B – Vite dev server on http://localhost:5173
 ```
+
+The frontend automatically talks to `http://localhost:3000/api` in dev and `/api` in production builds.
+
+## Building & Testing
+
+```bash
+npm run build:server   # emits dist/backend-lib/*
+npm run build          # builds server + frontend bundle (used by Vercel/@vercel/static-build)
+npm run preview        # serves the built frontend locally
+```
+
+## Deployment (Vercel)
+
+1. Push your code or run `vercel --prod`.
+2. Ensure `vercel.json` routes are untouched (API requests are rewritten to `api/[...all].ts`).
+3. Confirm the Production env vars cover every key listed in `.env.example`.
+4. Hit `https://<app>/api/ready` after deploy to verify Firebase Admin boots with your service-account.
+
+With the envs configured, the deployed frontend and backend share the same Firebase project, Firestore writes persist, and push notifications can register in production (provided the VAPID key is set).

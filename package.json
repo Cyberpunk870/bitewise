@@ -13,6 +13,7 @@
     "start": "node dist/backend-lib/app.js",
     "lint": "eslint .",
     "preview": "vite preview",
+    "dev:server": "ts-node --project backend-lib/tsconfig.server.json backend-lib/index.ts",
     "vercel-deploy": "npm run build && vercel --prod"
   },
   "dependencies": {

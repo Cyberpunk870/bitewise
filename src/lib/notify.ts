@@ -6,7 +6,9 @@ import { getAuth } from "firebase/auth";
 
 /* ----------------------------- Constants ----------------------------- */
 const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY;
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) || "http://localhost:3000/";
+const API_BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined) ||
+  (import.meta.env.DEV ? "http://localhost:3000/api" : "/api");
 const LS_LAST_PUSH_TOKEN = "bw.push.token";
 
 /* ----------------------------- Firebase App ----------------------------- */
@@ -51,7 +53,9 @@ async function postJSON(path: string, body: unknown) {
   if (!user) throw new Error("not authed");
   const token = await user.getIdToken();
   headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(API_BASE + path, {
+  const base = API_BASE.replace(/\/$/, "");
+  const finalPath = path.startsWith("/") ? path : `/${path}`;
+  const res = await fetch(base + finalPath, {
     method: "POST",
     headers,
     body: JSON.stringify(body),

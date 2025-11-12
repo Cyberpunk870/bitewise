@@ -1,119 +1,127 @@
 src
-├── App.css
-├── App.tsx
-├── assets
-│   └── react.svg
-├── components
-│   ├── appheader.tsx
-│   ├── AppHeader.tsx
-│   ├── CoinBubble.tsx
-│   ├── CoinIcon.tsx
-│   ├── CoinShower.tsx
-│   ├── CompareTray.tsx
-│   ├── DishCard.tsx
-│   ├── FilterPanel.tsx
-│   ├── HamburgerMenu.tsx
-│   ├── HomeFab.tsx
-│   ├── Map.tsx
-│   ├── OnboardFrame.tsx
-│   ├── RewardHost.tsx
-│   ├── ToastHost.tsx
-│   └── TopBanner.tsx
-├── constants
-│   └── onboarding.ts
-├── data
-│   ├── achievements.ts
-│   ├── availability.ts
-│   ├── dishCatalog.ts
-│   └── dishes.ts
-├── index.css
-├── lib
-│   ├── badgeCounts.ts
-│   ├── dishIndex.ts
-│   ├── events.ts
-│   ├── feed
-│   │   ├── ActowizAdapter.ts
-│   │   └── DummyAdapter.ts
-│   ├── firebase.ts
-│   ├── googleMaps.ts
-│   ├── images.ts
-│   ├── location.ts
-│   ├── notifications.ts
-│   ├── notify.ts
-│   ├── passkeyLocal.ts
-│   ├── permGate.ts
-│   ├── permPrefs.ts
-│   ├── permPrefs.ts.save
-│   ├── profileStore.ts
-│   ├── session.ts
-│   ├── TaskEngine.ts
-│   ├── tasks.ts
-│   └── tokens.ts
-├── main.tsx
-├── router
-│   └── RequireOnboarded.tsx
-├── router.tsx
-├── screens
-│   ├── achievements
-│   │   └── Achievements.tsx
-│   ├── auth
-│   │   ├── PasskeyLogin.tsx
-│   │   └── Unlock.tsx
-│   ├── availability
-│   │   ├── availability.tsx
-│   │   └── Availability.tsx
-│   ├── cart
-│   │   ├── cart.tsx
-│   │   └── Cart.tsx
-│   ├── compare
-│   │   ├── Compare.tsx
-│   │   └── Compare.tsx.save
-│   ├── History.tsx
-│   ├── home
-│   │   ├── home.tsx
-│   │   └── Home.tsx
-│   ├── leaderboard
-│   │   └── Leaderboard.tsx
-│   ├── Loading.tsx
-│   ├── menu
-│   │   └── Menu.tsx
-│   ├── notifications
-│   │   └── Inbox.tsx
-│   ├── onboarding
-│   │   ├── AddressLabel.tsx
-│   │   ├── AddressPick.tsx
-│   │   ├── Dob.tsx
-│   │   ├── Finish.tsx
-│   │   ├── Landing.tsx
-│   │   ├── Name.tsx
-│   │   ├── Otp.tsx
-│   │   ├── Permissions.tsx
-│   │   ├── PermLocation.tsx
-│   │   ├── PermMic.tsx
-│   │   ├── PermNotifications.tsx
-│   │   ├── Phone.tsx
-│   │   ├── Review.tsx
-│   │   ├── SetPasskey.tsx
-│   │   └── Welcome.tsx
-│   ├── orders
-│   ├── settings
-│   │   └── Settings.tsx
-│   └── tasks
-│       └── Tasks.tsx
-├── shell
-│   ├── appshell.tsx
-│   └── AppShell.tsx
-├── store
-│   ├── address.ts
-│   ├── auth.ts
-│   ├── cart.ts
-│   ├── filters.ts
-│   ├── onboarding.ts
-│   ├── onboarding.ts.save
-│   ├── persist.ts
-│   ├── theme.ts
-│   ├── toast.ts
-│   └── user.ts
-└── vite-env.d.ts
+|-- api
+|   `-- apiFetch.ts
+|-- App.css
+|-- App.tsx
+|-- assets
+|   `-- react.svg
+|-- components
+|   |-- AppHeader.tsx
+|   |-- CoinBubble.tsx
+|   |-- CoinIcon.tsx
+|   |-- CoinShower.tsx
+|   |-- CompareTray.tsx
+|   |-- DishCard.tsx
+|   |-- FilterPanel.tsx
+|   |-- HomeFab.tsx
+|   |-- Map.tsx
+|   |-- OnboardFrame.tsx
+|   |-- ReturnBanner.tsx
+|   |-- RewardHost.tsx
+|   |-- ToastHost.tsx
+|   `-- TopBanner.tsx
+|-- constants
+|   `-- onboarding.ts
+|-- data
+|   |-- achievements.ts
+|   |-- availability.ts
+|   |-- dishCatalog.ts
+|   `-- dishes.ts
+|-- hooks
+|   |-- authReady.ts
+|   `-- useAuthUser.ts
+|-- index.css
+|-- lib
+|   |-- addressBook.ts
+|   |-- apiClient.ts
+|   |-- api.ts
+|   |-- badgeCounts.ts
+|   |-- cloudProfile.ts
+|   |-- dataSync.ts
+|   |-- deeplinkReturn.ts
+|   |-- dishIndex.ts
+|   |-- events.ts
+|   |-- feed
+|   |   |-- ActowizAdapter.ts
+|   |   `-- DummyAdapter.ts
+|   |-- firebase.ts
+|   |-- googleMaps.ts
+|   |-- hardReset.ts
+|   |-- images.ts
+|   |-- location.ts
+|   |-- notifications.ts
+|   |-- notify.ts
+|   |-- orderReturn.ts
+|   |-- passkeyLocal.ts
+|   |-- permGate.ts
+|   |-- permPrefs.ts
+|   |-- permPrefs.ts.save
+|   |-- profileStore.ts
+|   |-- session.ts
+|   |-- TaskEngine.ts
+|   |-- tasks.ts
+|   `-- tokens.ts
+|-- main.tsx
+|-- router
+|   `-- RequireOnboarded.tsx
+|-- router.tsx
+|-- screens
+|   |-- achievements
+|   |   `-- Achievements.tsx
+|   |-- auth
+|   |   |-- PasskeyLogin.tsx
+|   |   `-- Unlock.tsx
+|   |-- availability
+|   |   `-- Availability.tsx
+|   |-- cart
+|   |   `-- Cart.tsx
+|   |-- compare
+|   |   |-- Compare.tsx
+|   |   `-- Compare.tsx.save
+|   |-- home
+|   |   `-- Home.tsx
+|   |-- leaderboard
+|   |   `-- Leaderboard.tsx
+|   |-- Loading.tsx
+|   |-- menu
+|   |   `-- Menu.tsx
+|   |-- notifications
+|   |   `-- Inbox.tsx
+|   |-- onboarding
+|   |   |-- AddressLabel.tsx
+|   |   |-- AddressPick.tsx
+|   |   |-- Dob.tsx
+|   |   |-- Finish.tsx
+|   |   |-- Landing.tsx
+|   |   |-- Name.tsx
+|   |   |-- Otp.tsx
+|   |   |-- Permissions.tsx
+|   |   |-- PermLocation.tsx
+|   |   |-- PermMic.tsx
+|   |   |-- PermNotifications.tsx
+|   |   |-- Phone.tsx
+|   |   |-- Review.tsx
+|   |   |-- SetPasskey.tsx
+|   |   `-- Welcome.tsx
+|   |-- orders
+|   |   `-- History.tsx
+|   |-- settings
+|   |   `-- Settings.tsx
+|   `-- tasks
+|       `-- Tasks.tsx
+|-- shell
+|   `-- AppShell.tsx
+|-- store
+|   |-- address.ts
+|   |-- auth.ts
+|   |-- cart.ts
+|   |-- filters.ts
+|   |-- onboarding.ts
+|   |-- onboarding.ts.save
+|   |-- persist.ts
+|   |-- theme.ts
+|   |-- toast.ts
+|   `-- user.ts
+`-- vite-env.d.ts
 
-24 directories, 93 files
+26 directories, 99 files

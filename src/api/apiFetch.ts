@@ -2,7 +2,10 @@
 import { getAuth } from "firebase/auth";
 import { waitForAuthInit } from "../hooks/authReady";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://bitewise-five.vercel.app";
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (import.meta.env.DEV ? "http://localhost:3000/api" : "/api");
+
 
 /**
  * apiFetch wraps fetch():

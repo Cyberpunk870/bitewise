@@ -77,10 +77,11 @@ export default function Unlock() {
 
       let customToken: string | null = null;
       try {
-        const base = import.meta.env.DEV
-          ? 'http://localhost:3000'
-          : '';
-        const resp = await fetch(base + '/api/backend-api/auth/mintCustomToken', {
+        const apiBase =
+          import.meta.env.VITE_API_BASE ||
+          (import.meta.env.DEV ? 'http://localhost:3000/api' : '/api');
+        const mintUrl = apiBase.replace(/\/api\/?$/, '') + '/api/auth/mintCustomToken';
+        const resp = await fetch(mintUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone }),

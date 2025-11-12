@@ -252,4 +252,46 @@ function haversineMeters(
 
   return R * c;
 }
+router.get("/", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const result = await getAddresses(uid);
+    res.json(result);
+  } catch (err: any) {
+    console.error("GET /user/addresses failed:", err);
+    res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+router.post("/", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const result = await saveAddress(uid, req.body);
+    res.json(result);
+  } catch (err: any) {
+    console.error("POST /user/addresses failed:", err);
+    const status = err?.name === "ZodError" ? 400 : 500;
+    res.status(status).json({ ok: false, error: err?.message || "internal error" });
+  }
+});
+
+router.get("/nearest", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const lat = Number(req.query?.lat);
+    const lng = Number(req.query?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ ok: false, error: "lat/lng required" });
+    }
+    const result = await nearestFor(uid, lat, lng);
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    console.error("GET /user/nearest failed:", err);
+    res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
 export default router;

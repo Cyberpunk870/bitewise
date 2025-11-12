@@ -26,21 +26,21 @@ export type ProfileOut = {
 /** GET /backend-api/user/profile — current user's profile */
 router.get("/", async (req: any, res) => {
   try {
-    const uid = req.uid;
+    const uid = req.user?.uid || req.uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
 
     const result = await getUserProfile(uid);
     return res.json(result);
   } catch (e: any) {
     console.error("GET /profile failed:", e);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    return res.status(500).json({ ok: false, error: e?.message || "internal error" });
   }
 });
 
 /** POST /backend-api/user/profile — update name/phone */
 router.post("/", async (req: any, res) => {
   try {
-    const uid = req.uid;
+    const uid = req.user?.uid || req.uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
 
     const input = req.body;
@@ -48,7 +48,7 @@ router.post("/", async (req: any, res) => {
     return res.json(result);
   } catch (e: any) {
     console.error("POST /profile failed:", e);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    return res.status(500).json({ ok: false, error: e?.message || "internal error" });
   }
 });
 
@@ -82,41 +82,50 @@ export async function getUserProfile(uid: string): Promise<{ ok: true; profile: 
   const name = user.name ? String(user.name) : undefined;
   const phone = user.phone ? String(user.phone) : undefined;
 
-  const achSnap = await db
-    .collection("achievements")
-    .where("user_id", "==", uid)
-    .orderBy("earned_at", "desc")
-    .limit(20)
-    .get();
+  let achievements: AchievementLite[] = [];
+  try {
+    const achSnap = await db
+      .collection("achievements")
+      .where("user_id", "==", uid)
+      .orderBy("earned_at", "desc")
+      .limit(20)
+      .get();
 
-  const achievements: AchievementLite[] = achSnap.docs.map((d) => {
-    const a = d.data() as any;
-    return {
-      id: a.id ?? d.id,
-      code: String(a.code || ""),
-      points: Number(a.points || 0),
-      earned_at: String(a.earned_at || a.created_at || ""),
-    };
-  });
-
-  const weekId = currentWeekId();
-  const lbSnap = await db
-    .collection("leaderboard")
-    .where("week_id", "==", weekId)
-    .where("region", "==", "global")
-    .orderBy("score", "desc")
-    .limit(100)
-    .get();
+    achievements = achSnap.docs.map((d) => {
+      const a = d.data() as any;
+      return {
+        id: a.id ?? d.id,
+        code: String(a.code || ""),
+        points: Number(a.points || 0),
+        earned_at: String(a.earned_at || a.created_at || ""),
+      };
+    });
+  } catch (err) {
+    console.warn("[user/profile] achievements query failed", err);
+  }
 
   let rank: number | null = null;
-  lbSnap.docs.some((doc, idx) => {
-    const row = doc.data() as any;
-    if (row.user_id === uid) {
-      rank = idx + 1;
-      return true;
-    }
-    return false;
-  });
+  try {
+    const weekId = currentWeekId();
+    const lbSnap = await db
+      .collection("leaderboard")
+      .where("week_id", "==", weekId)
+      .where("region", "==", "global")
+      .orderBy("score", "desc")
+      .limit(100)
+      .get();
+
+    lbSnap.docs.some((doc, idx) => {
+      const row = doc.data() as any;
+      if (row.user_id === uid) {
+        rank = idx + 1;
+        return true;
+      }
+      return false;
+    });
+  } catch (err) {
+    console.warn("[user/profile] leaderboard query failed", err);
+  }
 
   return {
     ok: true,

@@ -1,7 +1,9 @@
 // bitewise/server/api/achievements.ts
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
+import express from "express";
 
+const router = express.Router();
 const AchInput = z.object({
   user_id: z.string().min(1),
   code: z.string().min(1),        // e.g., "first_save", "hundred_club"
@@ -90,3 +92,4 @@ export async function getAchievements(uid?: string) {
   const data = await getAchievementsFor(uid);
   return { ok: true, data };
 }
+export default router;

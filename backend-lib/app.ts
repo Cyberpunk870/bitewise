@@ -21,6 +21,10 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
 import fs from "fs";
+import path from "path";
+
+const EMBEDDED_SERVICE_ACCOUNT_B64 =
+  "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiYml0ZXdpc2UtOTMiLAogICJwcml2YXRlX2tleV9pZCI6ICJjNjIzY2FmNmVhOWE4MjliM2JmZjQyMGJiZDVhZWZiZWY2M2NlZTcwIiwKICAicHJpdmF0ZV9rZXkiOiAiLS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tXG5NSUlFdlFJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLY3dnZ1NqQWdFQUFvSUJBUURTUjRGRVhzOTdXNTVaXG5xbnRyMGE5OUgzZW5oS1EzOUk1RUZDT2RzNTNaaEE3Z0Uvck9NM0dIdmo0T2RReEEyRFlKMk5pTWVOaXpWbFlqXG5wQkVHMjM5cjY1ZjBORWNLWU9CTVBmdDBCeHhpUFlxUGhlY2dMTUtLME41SUFmbVlkdURoTlR3UVZiZnpsWkVxXG5rNlN0Q0xGSlRBS3UyNEdkV1phdjJYem84d1BSeldJcjZjenlTYzBoak8xVlJpd3Fzc1VaOTlVRDBiRlMydDA5XG5sSXlPM3JBeDVZUnFVSXFieCtPUVFUQ3hJSnVsdjRNY0RuaC9uVTV1N1FsUVVhbXY4V2JqYkxjQ3hnVDNIbUpvXG5kSlEvbGNSU0FjSU5Ea29hdE5TaFVCaUd6Z1VJR2lIR2l1V2c5SG8zSWFlT1Q0VVZqWVRuM3N3cDQvbUZKdXJNXG5SeU9pYVN2M0FnTUJBQUVDZ2dFQVZNaHYzbGs3M3NqNTk3MDlOaU85VmYyeUNPRDZOWFZ0UnhXM3BvWWRSdTV2XG44UGtkVHJaL04vUUVvVitnS1NVRDVNU0J5MkdPUGdDNWluVkVTRGVJRU1OVTZTbUsyeXhrUTFsYVlWWGNvOStjXG5Wbkh1MXBJMWZqTG83SytmSzFJREtjcUZCVEVLa2pQajYvN0xqdGpLWW5zN09iVlhkVklCNTdVUkgvdWJ0cU1WXG5mWTdKWGFNd3JuL2tydlRvc2NwdzBwS2lwS08xQlBQWnVNc1dKUjUrZ2dJVHAwYzZFTEFQMnBSYXBtc2NJNmErXG5iVlZVWDRRNmFEZytseUw3WXY2YnNYbC9tUHRqM2d3bnpHNE1rNm5KQWZadzEwcHFuV0xOSEVRUFE2Sms5UWQ3XG5Sc0VxK1VtWGpyRG9RY3BPR3c4TkRzZkFxTHJnTGlRRGVlYnRDT253Z1FLQmdRRHpDNng1dWV1QnY5M2ZvRVhaXG53R0NETXljSFN3c2V3cEZBZFY1R1ZSRFpCb0RRV1hGYTBBaTFEdk9NWnlqR1VnNFpvcHM2OVdhTExDUDdQeklOXG43TXpuRVZCa3hNNC9BbHN1UGlZNlcyQmYzQ3ltMmJ1cmN5emYvVVNFSENVUmlTejRYbnBrbVgzMmJEMHpQdGx5XG5HT1lZSXBrVzhOd3FPWFN3dEpQd1YwcVhQd0tCZ1FEZGZMMUwrQ1phRjFuRVVoYk5SaGlSYzNSS0RCd2ZUbzM4XG5KV2VBSHNtSzVrRERlZkRzSW5SaVFNY3lhQ090TVBGVmNFU2twd3BCalNvdVBOSTcxSS9iV293UzBaWWxxVVdxXG5ncHIrZndDa3dOem9PVllxb1lLOUZCdEhkUE84OEFxSWhjaVA5c0ZNbXlVR3hPODNTUEpmRXJzaVJKOC9ER2xIXG5YYjNVTWl3MVNRS0JnREJySXZFZEdNM0FhM01oZXNqbWlsT1kzUzJXeGFCYklwUzB6Uk0xM3lWZEpreGJoVG1TXG5PQ25aMEtzbjRmZWdZUzY2TmpLSXNPVUk1aUluZE5GUlc0Q3M4bGNnM2ZXdmducXo1dW01U25uT1l4YmFTWWplXG5hUkkyWW0vdkszTlM0S0thTDhmYXpEMUxVdVhpbjI4YmhydElLVGRveEhPay9wbzFYME9DSUZvQkFvR0JBTlcrXG5vYmdFM0k0bzVycHROaEFYeTNIaTU2RG1HdVdqbTZad09uZ01QaGZMcVVoOEQ2THloVHFrcFJmaUpEdnBkWjBzXG5ZVEk4K2NyVS9wWHNvRDZaSGROa2lMVklpZ3dDVlhiOTM3SW13bW84clhOMmtjOUdXck02Q2pGbGppc1J4RGlJXG5VMHVMcUhQVGJXSWcvM0pzOVdvRzI0MXdoL1lDZGo4bkdpRUQ0bUh4QW9HQUU0VVNPM1lKbTNBVjd0dTdjQmovXG5QTUF6YXEzVWFqYWFDaFFWRDgvWkxWbHRCZUR6NFdkSXF5N0VKSzRvalpOZTNZQlNFYXNubmJDZUhOQThycGNDXG55c2QyVGxWOUJSVThrNzhkZmNJSmxjMkNiTDFwTXpWaTBrVFRDUEZZOGNJVkQ2SkV5ZEU0enBPMlBEVUN2eG0rXG5RVlFLNXNiWW9YQm1ycGdrbVViNGlvND1cbi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS1cbiIsCiAgImNsaWVudF9lbWFpbCI6ICJmaXJlYmFzZS1hZG1pbnNkay1mYnN2Y0BiaXRld2lzZS05My5pYW0uZ3NlcnZpY2VhY2NvdW50LmNvbSIsCiAgImNsaWVudF9pZCI6ICIxMDgyMzc2OTAyMjk4ODMwMDQ3MjgiLAogICJhdXRoX3VyaSI6ICJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20vby9vYXV0aDIvYXV0aCIsCiAgInRva2VuX3VyaSI6ICJodHRwczovL29hdXRoMi5nb29nbGVhcGlzLmNvbS90b2tlbiIsCiAgImF1dGhfcHJvdmlkZXJfeDUwOV9jZXJ0X3VybCI6ICJodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9vYXV0aDIvdjEvY2VydHMiLAogICJjbGllbnRfeDUwOV9jZXJ0X3VybCI6ICJodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9yb2JvdC92MS9tZXRhZGF0YS94NTA5L2ZpcmViYXNlLWFkbWluc2RrLWZic3ZjJTQwYml0ZXdpc2UtOTMuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K";
 
 import userRoutes from "./backend-api/user";
 import orders from "./backend-api/orders";
@@ -32,46 +36,74 @@ import { verifyAuth } from "./middleware/verifyAuth";
 console.log("[server/app] module loading…");
 
 /* -------------------- Firebase credential loader -------------------- */
+function massagePrivateKey<T extends { private_key?: string }>(sa: T): T {
+  if (typeof sa.private_key === "string" && sa.private_key.includes("\\n")) {
+    sa.private_key = sa.private_key.replace(/\\n/g, "\n");
+  }
+  return sa;
+}
+
+function tryReadJsonFile(saPath: string | undefined) {
+  if (!saPath) return null;
+  try {
+    if (!fs.existsSync(saPath)) return null;
+    console.log("[server/app] using service account file:", saPath);
+    const raw = fs.readFileSync(saPath, "utf8");
+    return massagePrivateKey(JSON.parse(raw));
+  } catch (e) {
+    console.error("[server/app] failed to read/parse SA file:", e);
+    throw e;
+  }
+}
+
+function tryParseJsonEnv(value: string | undefined, label: string) {
+  if (!value) return null;
+  try {
+    console.log(`[server/app] using ${label} (len=${value.length})`);
+    return massagePrivateKey(JSON.parse(value));
+  } catch (e) {
+    console.error(`[server/app] ${label} parse failed:`, e);
+    throw e;
+  }
+}
+
 function loadServiceAccount(): ServiceAccount {
-  const path = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-  if (path && fs.existsSync(path)) {
-    console.log("[server/app] using FIREBASE_SERVICE_ACCOUNT_PATH:", path);
+  console.log("[server/app] process cwd", process.cwd());
+  const candidatePaths = [
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH,
+    path.join(process.cwd(), "firebase", "service-account.json"),
+    path.join(__dirname, "..", "firebase", "service-account.json"),
+    path.join(__dirname, "..", "..", "firebase", "service-account.json"),
+  ];
+  console.log("[server/app] checking service account paths", candidatePaths);
+  for (const p of candidatePaths) {
+    const sa = tryReadJsonFile(p);
+    if (sa) return sa as ServiceAccount;
+  }
+
+  const json = tryParseJsonEnv(process.env.FIREBASE_SERVICE_ACCOUNT_JSON, "FIREBASE_SERVICE_ACCOUNT_JSON");
+  if (json) return json as ServiceAccount;
+
+  const jsonB64 = process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64
+    ? Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_JSON_BASE64, "base64").toString("utf8")
+    : undefined;
+  const fromB64 = tryParseJsonEnv(jsonB64, "FIREBASE_SERVICE_ACCOUNT_JSON_BASE64");
+  if (fromB64) return fromB64 as ServiceAccount;
+
+  if (EMBEDDED_SERVICE_ACCOUNT_B64) {
     try {
-      const raw = fs.readFileSync(path, "utf8");
-      const parsed = JSON.parse(raw);
-      if (typeof parsed.private_key === "string" && parsed.private_key.includes("\\n")) {
-        parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
-      }
-      return parsed;
-    } catch (e) {
-      console.error("[server/app] failed to read/parse SA file:", e);
-      throw e;
+      const decoded = Buffer.from(EMBEDDED_SERVICE_ACCOUNT_B64, "base64").toString("utf8");
+      const parsed = massagePrivateKey(JSON.parse(decoded));
+      console.log("[server/app] using embedded service account fallback");
+      return parsed as ServiceAccount;
+    } catch (err) {
+      console.error("[server/app] embedded service account decode failed:", err);
     }
   }
 
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (json) {
-    console.log("[server/app] using FIREBASE_SERVICE_ACCOUNT_JSON (len=%d)", json.length);
-    try {
-      const sa: any = JSON.parse(json);
-      if (typeof sa.private_key === "string" && sa.private_key.includes("\\n")) {
-        sa.private_key = sa.private_key.replace(/\\n/g, "\n");
-      }
-      if (!sa.client_email || !sa.private_key) {
-        console.error("[server/app] SA JSON missing keys (client_email/private_key)");
-      }
-      return sa as ServiceAccount;
-    } catch (e) {
-      console.error("[server/app] SA JSON parse failed:", e);
-      throw e;
-    }
-  }
-
-  console.error(
-    "[server/app] no FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON present"
-  );
+  console.error("[server/app] missing Firebase credentials.");
   throw new Error(
-    "Missing Firebase credentials. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON."
+    "Missing Firebase credentials. Provide FIREBASE_SERVICE_ACCOUNT_PATH, JSON, or JSON_BASE64."
   );
 }
 
@@ -97,11 +129,18 @@ function ensureAdminMiddleware(_req: Request, _res: Response, next: NextFunction
 
 /* -------------------- App setup -------------------- */
 const app = express();
-const allowedOrigins = [
+const defaultOrigins = [
   "http://localhost:5173",
   "https://bitewise-five.vercel.app",
   "https://bitewise.vercel.app",
 ];
+const envOrigins =
+  process.env.CLIENT_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) || [];
+const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+const allowedOrigins = Array.from(
+  new Set([...defaultOrigins, ...envOrigins, ...(vercelOrigin ? [vercelOrigin] : [])])
+);
+
 app.use(
   cors({
     origin: function (origin, callback) {
