@@ -23,7 +23,7 @@ Copy `.env.example` to `.env.local` for local development. The same keys must be
 | `VITE_API_BASE` | Use `/api` in prod (defaults to `/api` automatically). |
 | `VITE_FCM_VAPID_KEY` | Web push key from Firebase console (Project Settings → Cloud Messaging). |
 | `CLIENT_ORIGINS` | Comma-separated list of web origins allowed to hit the backend (include localhost, preview, and prod domains). |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` or `FIREBASE_SERVICE_ACCOUNT_JSON` | Backend credentials so Firebase Admin can mint/verify tokens & write to Firestore. |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` / `FIREBASE_SERVICE_ACCOUNT_JSON` / `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` | Provide one of these so Firebase Admin can mint custom tokens and write to Firestore in production. |
 
 ### Vercel env tips
 

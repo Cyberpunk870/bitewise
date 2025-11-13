@@ -159,14 +159,28 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
         console.log("[server/app] /api/auth/mintCustomToken hit");
         ensureAdmin();
         const phone = String(req.body?.phone || "").trim();
-        if (!phone)
-            return res.status(400).json({ ok: false, error: "phone required" });
+        const uidFromBody = String(req.body?.uid || "").trim();
+        if (!phone && !uidFromBody) {
+            return res.status(400).json({ ok: false, error: "phone or uid required" });
+        }
         const db = (0, firestore_1.getFirestore)();
-        const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
-        if (snap.empty)
+        let targetUid = uidFromBody;
+        if (!targetUid && phone) {
+            const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
+            if (!snap.empty) {
+                targetUid = snap.docs[0].id;
+            }
+        }
+        if (!targetUid) {
             return res.status(404).json({ ok: false, error: "no such user" });
-        const uid = snap.docs[0].id;
-        const token = await (0, auth_1.getAuth)().createCustomToken(uid, { phone });
+        }
+        if (phone) {
+            await db
+                .collection("users")
+                .doc(targetUid)
+                .set({ phone, updated_at: new Date().toISOString() }, { merge: true });
+        }
+        const token = await (0, auth_1.getAuth)().createCustomToken(targetUid, phone ? { phone } : undefined);
         return res.json({ ok: true, token });
     }
     catch (err) {

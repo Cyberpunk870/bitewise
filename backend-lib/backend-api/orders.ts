@@ -12,7 +12,6 @@ import express from "express";
  */
 const router = express.Router();
 const Inbound = z.object({
-  user_id: z.string().min(1),
   platform: z.string().optional(),
   partner: z.string().optional(),        // legacy alias
   restaurant: z.string().optional(),
@@ -58,7 +57,7 @@ function col() {
  * User tapped "Order on Swiggy" / "Order on Zomato".
  * We log intent + pricing snapshot.
  */
-export async function markOutbound(raw: unknown) {
+export async function markOutbound(raw: unknown, uid: string) {
   const input = Inbound.parse(raw);
 
   // normalize platform field
@@ -107,7 +106,7 @@ export async function markOutbound(raw: unknown) {
   // Build a base doc with only required / always-safe fields.
   const base: OrderEventDoc = {
     id,
-    user_id: input.user_id,
+    user_id: uid,
     platform,
     dish_name: input.dish_name || "basket",
     compare_price,
@@ -274,4 +273,46 @@ async function completedCountFor(user_id: string) {
     .get();
   return snap.size;
 }
+
+router.post("/outbound", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const result = await markOutbound(req.body, uid);
+    return res.json(result);
+  } catch (err: any) {
+    console.error("POST /orders/outbound failed", err);
+    const status = err?.name === "ZodError" ? 400 : 500;
+    return res.status(status).json({ ok: false, error: err?.message || "internal error" });
+  }
+});
+
+router.post("/complete", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const id = String(req.body?.id || "").trim();
+    const saved = Number(req.body?.saved_amount ?? req.body?.saved);
+    if (!id) return res.status(400).json({ ok: false, error: "id required" });
+    await markCompletion(uid, id, Number.isFinite(saved) ? saved : 0);
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error("POST /orders/complete failed", err);
+    const msg = err?.message || "internal error";
+    const status = msg === "forbidden" ? 403 : msg === "order event not found" ? 404 : 500;
+    return res.status(status).json({ ok: false, error: msg });
+  }
+});
+
+router.get("/", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const result = await getOrderEvents(uid);
+    res.json(result);
+  } catch (err: any) {
+    console.error("GET /orders failed", err);
+    res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
 export default router;

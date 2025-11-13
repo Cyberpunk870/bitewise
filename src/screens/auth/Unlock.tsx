@@ -7,6 +7,7 @@ import { toast } from '../../store/toast';
 import { emit } from '../../lib/events';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { hydrateActiveFromCloud } from '../../lib/cloudProfile';
+import { initOrRefreshPushOnAuth } from '../../lib/notify';
 
 export default function Unlock() {
   const nav = useNavigate();
@@ -22,6 +23,17 @@ export default function Unlock() {
       if (last) return last;
       const active = getActiveProfile();
       return active?.phone || '';
+    } catch {
+      return '';
+    }
+  }, []);
+
+  const storedUid = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('bw_session');
+      if (!raw) return '';
+      const parsed = JSON.parse(raw);
+      return typeof parsed?.uid === 'string' ? parsed.uid : '';
     } catch {
       return '';
     }
@@ -76,6 +88,7 @@ export default function Unlock() {
       }
 
       let customToken: string | null = null;
+      let mintStatus: number | null = null;
       try {
         const apiBase =
           import.meta.env.VITE_API_BASE ||
@@ -84,8 +97,9 @@ export default function Unlock() {
         const resp = await fetch(mintUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone }),
+          body: JSON.stringify({ phone, uid: storedUid || undefined }),
         });
+        mintStatus = resp.status;
         if (resp.ok) {
           const data = await resp.json();
           if (data?.ok && data?.token) {
@@ -100,16 +114,26 @@ export default function Unlock() {
         console.warn('mintCustomToken fetch error', err);
       }
 
-      if (customToken) {
-        try {
-          const auth = getAuth();
-          await signInWithCustomToken(auth, customToken);
-          console.log('✅ Firebase re-signed in via custom token');
-        } catch (err) {
-          console.warn('signInWithCustomToken failed', err);
+      if (!customToken) {
+        if (mintStatus === 404) {
+          toast.error('We could not find your account. Please sign in again.');
+        } else {
+          toast.error('Session expired. Please sign in again.');
         }
-      } else {
-        console.warn('No custom token received; continuing without Firebase sign-in');
+        nav('/onboarding/auth/phone?mode=login', { replace: true });
+        return;
+      }
+
+      try {
+        const auth = getAuth();
+        await signInWithCustomToken(auth, customToken);
+        console.log('✅ Firebase re-signed in via custom token');
+        await initOrRefreshPushOnAuth(phone);
+      } catch (err) {
+        console.warn('signInWithCustomToken failed', err);
+        toast.error('Could not restore your session. Please sign in again.');
+        nav('/onboarding/auth/phone?mode=login', { replace: true });
+        return;
       }
 
       try {

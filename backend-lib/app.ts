@@ -178,14 +178,33 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
     console.log("[server/app] /api/auth/mintCustomToken hit");
     ensureAdmin();
     const phone = String(req.body?.phone || "").trim();
-    if (!phone) return res.status(400).json({ ok: false, error: "phone required" });
+    const uidFromBody = String(req.body?.uid || "").trim();
+    if (!phone && !uidFromBody) {
+      return res.status(400).json({ ok: false, error: "phone or uid required" });
+    }
 
     const db = getFirestore();
-    const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
-    if (snap.empty) return res.status(404).json({ ok: false, error: "no such user" });
+    let targetUid = uidFromBody;
 
-    const uid = snap.docs[0].id;
-    const token = await getAdminAuth().createCustomToken(uid, { phone });
+    if (!targetUid && phone) {
+      const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
+      if (!snap.empty) {
+        targetUid = snap.docs[0].id;
+      }
+    }
+
+    if (!targetUid) {
+      return res.status(404).json({ ok: false, error: "no such user" });
+    }
+
+    if (phone) {
+      await db
+        .collection("users")
+        .doc(targetUid)
+        .set({ phone, updated_at: new Date().toISOString() }, { merge: true });
+    }
+
+    const token = await getAdminAuth().createCustomToken(targetUid, phone ? { phone } : undefined);
     return res.json({ ok: true, token });
   } catch (err: any) {
     console.error("mintCustomToken error", err);
