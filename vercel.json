@@ -7,7 +7,7 @@
       "config": {
         "includeFiles": [
           "firebase/service-account.json",
-          "dist/backend-lib/**"
+          "backend-cjs/**"
         ]
       }
     },
