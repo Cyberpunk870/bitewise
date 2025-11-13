@@ -1,35 +1,39 @@
-// /public/firebase-messaging-sw.js  (classic SW, not module)
+// Firebase Messaging Service Worker
+// Loaded by the browser (not bundled). Keep it lean and self-contained.
 
-// Load compat builds so we can use importScripts + older SW pattern
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
-// --- REQUIRED: your web app config (safe to be public in SW) ---
-firebase.initializeApp({
+const firebaseConfig = {
   apiKey: 'AIzaSyCoEVDMs_3mPfMKWu3rib6r0n96LvJ-TCc',
-  appId: '1:989322472496:web:466ef8a4805d9bb3c191f5',
+  authDomain: 'bitewise-93.firebaseapp.com',
   projectId: 'bitewise-93',
   messagingSenderId: '989322472496',
-});
+  appId: '1:989322472496:web:466ef8a4805d9bb3c191f5',
+  measurementId: 'G-2VS2VYE3RD',
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
 const messaging = firebase.messaging();
 
-// Ensure the newest SW takes control quickly
-self.addEventListener('install', (e) => {
-  self.skipWaiting();
-});
-self.addEventListener('activate', (e) => {
-  clients.claim();
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
 });
 
-// Optional: background notifications
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 messaging.onBackgroundMessage((payload) => {
-  const title =
-    (payload.notification && payload.notification.title) || 'BiteWise';
+  const notification = payload?.notification || {};
+  const title = notification.title || 'BiteWise';
   const options = {
-    body: (payload.notification && payload.notification.body) || 'New update',
+    body: notification.body || 'You have a new update!',
     icon: '/icons/icon-192.png',
-    data: payload.data || {},
+    data: payload?.data || {},
   };
   self.registration.showNotification(title, options);
 });
