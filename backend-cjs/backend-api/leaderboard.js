@@ -54,4 +54,20 @@ async function getLeaderboard(opts) {
     const data = snap.docs.map((d) => d.data());
     return { ok: true, week_id: wk, region, data };
 }
+router.get("/", async (req, res) => {
+    try {
+        const { week_id, region, limit } = req.query;
+        const parsedLimit = typeof limit === "string" ? Number(limit) : undefined;
+        const result = await getLeaderboard({
+            week_id: typeof week_id === "string" && week_id.trim() ? week_id.trim() : undefined,
+            region: typeof region === "string" && region.trim() ? region.trim() : undefined,
+            limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+        });
+        res.json(result);
+    }
+    catch (err) {
+        console.error("GET /leaderboard failed", err);
+        res.status(500).json({ ok: false, error: err?.message || "internal error" });
+    }
+});
 exports.default = router;

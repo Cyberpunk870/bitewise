@@ -11,6 +11,18 @@ const API_BASE =
   (import.meta.env.DEV ? "http://localhost:3000/api" : "/api");
 const LS_LAST_PUSH_TOKEN = "bw.push.token";
 
+async function ensureMessagingServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator)) return null;
+  try {
+    const existing = await navigator.serviceWorker.getRegistration("/firebase-messaging-sw.js");
+    if (existing) return existing;
+    return await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+  } catch (err) {
+    console.warn("[notify] sw register failed", err);
+    return null;
+  }
+}
+
 /* ----------------------------- Firebase App ----------------------------- */
 function getFirebaseApp() {
   const existing = getApps();
@@ -94,10 +106,13 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
     return;
   }
 
+  const swReg = await ensureMessagingServiceWorker();
+  if (!swReg) return;
+
   const doGet = async () => {
     return await getToken(messaging, {
       vapidKey: VAPID_KEY,
-      serviceWorkerRegistration: await navigator.serviceWorker.ready,
+      serviceWorkerRegistration: swReg,
     });
   };
 

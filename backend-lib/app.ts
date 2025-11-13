@@ -184,12 +184,18 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
     }
 
     const db = getFirestore();
+    const adminAuth = getAdminAuth();
     let targetUid = uidFromBody;
 
     if (!targetUid && phone) {
-      const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
-      if (!snap.empty) {
-        targetUid = snap.docs[0].id;
+      try {
+        const authUser = await adminAuth.getUserByPhoneNumber(phone);
+        targetUid = authUser.uid;
+      } catch {
+        const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
+        if (!snap.empty) {
+          targetUid = snap.docs[0].id;
+        }
       }
     }
 
@@ -204,7 +210,7 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
         .set({ phone, updated_at: new Date().toISOString() }, { merge: true });
     }
 
-    const token = await getAdminAuth().createCustomToken(targetUid, phone ? { phone } : undefined);
+    const token = await adminAuth.createCustomToken(targetUid, phone ? { phone } : undefined);
     return res.json({ ok: true, token });
   } catch (err: any) {
     console.error("mintCustomToken error", err);
@@ -243,6 +249,37 @@ app.post("/api/push/register", async (req, res) => {
   } catch (err) {
     console.error("push/register error", err);
     res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+app.post("/api/push/sendTest", async (req, res) => {
+  try {
+    const uid = (req as any).uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const db = getFirestore();
+    const snap = await db
+      .collection("users")
+      .doc(uid)
+      .collection("devices")
+      .where("active", "==", true)
+      .get();
+
+    const tokens = snap.docs.map((d) => String(d.data()?.token || "").trim()).filter(Boolean);
+    if (!tokens.length) {
+      return res.status(404).json({ ok: false, error: "no active push tokens" });
+    }
+
+    const title = String(req.body?.title || "BiteWise");
+    const body = String(req.body?.body || "Push notifications are live!");
+    await getMessaging().sendEachForMulticast({
+      tokens,
+      notification: { title, body },
+    });
+
+    res.json({ ok: true, sent: tokens.length });
+  } catch (err: any) {
+    console.error("push/sendTest error", err);
+    res.status(500).json({ ok: false, error: err?.message || "internal error" });
   }
 });
 

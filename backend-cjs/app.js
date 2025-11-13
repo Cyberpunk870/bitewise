@@ -16,6 +16,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
+const messaging_1 = require("firebase-admin/messaging");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const EMBEDDED_SERVICE_ACCOUNT_B64 = "ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAiYml0ZXdpc2UtOTMiLAogICJwcml2YXRlX2tleV9pZCI6ICJjNjIzY2FmNmVhOWE4MjliM2JmZjQyMGJiZDVhZWZiZWY2M2NlZTcwIiwKICAicHJpdmF0ZV9rZXkiOiAiLS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tXG5NSUlFdlFJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLY3dnZ1NqQWdFQUFvSUJBUURTUjRGRVhzOTdXNTVaXG5xbnRyMGE5OUgzZW5oS1EzOUk1RUZDT2RzNTNaaEE3Z0Uvck9NM0dIdmo0T2RReEEyRFlKMk5pTWVOaXpWbFlqXG5wQkVHMjM5cjY1ZjBORWNLWU9CTVBmdDBCeHhpUFlxUGhlY2dMTUtLME41SUFmbVlkdURoTlR3UVZiZnpsWkVxXG5rNlN0Q0xGSlRBS3UyNEdkV1phdjJYem84d1BSeldJcjZjenlTYzBoak8xVlJpd3Fzc1VaOTlVRDBiRlMydDA5XG5sSXlPM3JBeDVZUnFVSXFieCtPUVFUQ3hJSnVsdjRNY0RuaC9uVTV1N1FsUVVhbXY4V2JqYkxjQ3hnVDNIbUpvXG5kSlEvbGNSU0FjSU5Ea29hdE5TaFVCaUd6Z1VJR2lIR2l1V2c5SG8zSWFlT1Q0VVZqWVRuM3N3cDQvbUZKdXJNXG5SeU9pYVN2M0FnTUJBQUVDZ2dFQVZNaHYzbGs3M3NqNTk3MDlOaU85VmYyeUNPRDZOWFZ0UnhXM3BvWWRSdTV2XG44UGtkVHJaL04vUUVvVitnS1NVRDVNU0J5MkdPUGdDNWluVkVTRGVJRU1OVTZTbUsyeXhrUTFsYVlWWGNvOStjXG5Wbkh1MXBJMWZqTG83SytmSzFJREtjcUZCVEVLa2pQajYvN0xqdGpLWW5zN09iVlhkVklCNTdVUkgvdWJ0cU1WXG5mWTdKWGFNd3JuL2tydlRvc2NwdzBwS2lwS08xQlBQWnVNc1dKUjUrZ2dJVHAwYzZFTEFQMnBSYXBtc2NJNmErXG5iVlZVWDRRNmFEZytseUw3WXY2YnNYbC9tUHRqM2d3bnpHNE1rNm5KQWZadzEwcHFuV0xOSEVRUFE2Sms5UWQ3XG5Sc0VxK1VtWGpyRG9RY3BPR3c4TkRzZkFxTHJnTGlRRGVlYnRDT253Z1FLQmdRRHpDNng1dWV1QnY5M2ZvRVhaXG53R0NETXljSFN3c2V3cEZBZFY1R1ZSRFpCb0RRV1hGYTBBaTFEdk9NWnlqR1VnNFpvcHM2OVdhTExDUDdQeklOXG43TXpuRVZCa3hNNC9BbHN1UGlZNlcyQmYzQ3ltMmJ1cmN5emYvVVNFSENVUmlTejRYbnBrbVgzMmJEMHpQdGx5XG5HT1lZSXBrVzhOd3FPWFN3dEpQd1YwcVhQd0tCZ1FEZGZMMUwrQ1phRjFuRVVoYk5SaGlSYzNSS0RCd2ZUbzM4XG5KV2VBSHNtSzVrRERlZkRzSW5SaVFNY3lhQ090TVBGVmNFU2twd3BCalNvdVBOSTcxSS9iV293UzBaWWxxVVdxXG5ncHIrZndDa3dOem9PVllxb1lLOUZCdEhkUE84OEFxSWhjaVA5c0ZNbXlVR3hPODNTUEpmRXJzaVJKOC9ER2xIXG5YYjNVTWl3MVNRS0JnREJySXZFZEdNM0FhM01oZXNqbWlsT1kzUzJXeGFCYklwUzB6Uk0xM3lWZEpreGJoVG1TXG5PQ25aMEtzbjRmZWdZUzY2TmpLSXNPVUk1aUluZE5GUlc0Q3M4bGNnM2ZXdmducXo1dW01U25uT1l4YmFTWWplXG5hUkkyWW0vdkszTlM0S0thTDhmYXpEMUxVdVhpbjI4YmhydElLVGRveEhPay9wbzFYME9DSUZvQkFvR0JBTlcrXG5vYmdFM0k0bzVycHROaEFYeTNIaTU2RG1HdVdqbTZad09uZ01QaGZMcVVoOEQ2THloVHFrcFJmaUpEdnBkWjBzXG5ZVEk4K2NyVS9wWHNvRDZaSGROa2lMVklpZ3dDVlhiOTM3SW13bW84clhOMmtjOUdXck02Q2pGbGppc1J4RGlJXG5VMHVMcUhQVGJXSWcvM0pzOVdvRzI0MXdoL1lDZGo4bkdpRUQ0bUh4QW9HQUU0VVNPM1lKbTNBVjd0dTdjQmovXG5QTUF6YXEzVWFqYWFDaFFWRDgvWkxWbHRCZUR6NFdkSXF5N0VKSzRvalpOZTNZQlNFYXNubmJDZUhOQThycGNDXG55c2QyVGxWOUJSVThrNzhkZmNJSmxjMkNiTDFwTXpWaTBrVFRDUEZZOGNJVkQ2SkV5ZEU0enBPMlBEVUN2eG0rXG5RVlFLNXNiWW9YQm1ycGdrbVViNGlvND1cbi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS1cbiIsCiAgImNsaWVudF9lbWFpbCI6ICJmaXJlYmFzZS1hZG1pbnNkay1mYnN2Y0BiaXRld2lzZS05My5pYW0uZ3NlcnZpY2VhY2NvdW50LmNvbSIsCiAgImNsaWVudF9pZCI6ICIxMDgyMzc2OTAyMjk4ODMwMDQ3MjgiLAogICJhdXRoX3VyaSI6ICJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20vby9vYXV0aDIvYXV0aCIsCiAgInRva2VuX3VyaSI6ICJodHRwczovL29hdXRoMi5nb29nbGVhcGlzLmNvbS90b2tlbiIsCiAgImF1dGhfcHJvdmlkZXJfeDUwOV9jZXJ0X3VybCI6ICJodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9vYXV0aDIvdjEvY2VydHMiLAogICJjbGllbnRfeDUwOV9jZXJ0X3VybCI6ICJodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9yb2JvdC92MS9tZXRhZGF0YS94NTA5L2ZpcmViYXNlLWFkbWluc2RrLWZic3ZjJTQwYml0ZXdpc2UtOTMuaWFtLmdzZXJ2aWNlYWNjb3VudC5jb20iLAogICJ1bml2ZXJzZV9kb21haW4iOiAiZ29vZ2xlYXBpcy5jb20iCn0K";
@@ -164,11 +165,18 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
             return res.status(400).json({ ok: false, error: "phone or uid required" });
         }
         const db = (0, firestore_1.getFirestore)();
+        const adminAuth = (0, auth_1.getAuth)();
         let targetUid = uidFromBody;
         if (!targetUid && phone) {
-            const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
-            if (!snap.empty) {
-                targetUid = snap.docs[0].id;
+            try {
+                const authUser = await adminAuth.getUserByPhoneNumber(phone);
+                targetUid = authUser.uid;
+            }
+            catch {
+                const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
+                if (!snap.empty) {
+                    targetUid = snap.docs[0].id;
+                }
             }
         }
         if (!targetUid) {
@@ -180,7 +188,7 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
                 .doc(targetUid)
                 .set({ phone, updated_at: new Date().toISOString() }, { merge: true });
         }
-        const token = await (0, auth_1.getAuth)().createCustomToken(targetUid, phone ? { phone } : undefined);
+        const token = await adminAuth.createCustomToken(targetUid, phone ? { phone } : undefined);
         return res.json({ ok: true, token });
     }
     catch (err) {
@@ -218,6 +226,35 @@ app.post("/api/push/register", async (req, res) => {
     catch (err) {
         console.error("push/register error", err);
         res.status(500).json({ ok: false, error: "internal error" });
+    }
+});
+app.post("/api/push/sendTest", async (req, res) => {
+    try {
+        const uid = req.uid;
+        if (!uid)
+            return res.status(401).json({ ok: false, error: "unauthorized" });
+        const db = (0, firestore_1.getFirestore)();
+        const snap = await db
+            .collection("users")
+            .doc(uid)
+            .collection("devices")
+            .where("active", "==", true)
+            .get();
+        const tokens = snap.docs.map((d) => String(d.data()?.token || "").trim()).filter(Boolean);
+        if (!tokens.length) {
+            return res.status(404).json({ ok: false, error: "no active push tokens" });
+        }
+        const title = String(req.body?.title || "BiteWise");
+        const body = String(req.body?.body || "Push notifications are live!");
+        await (0, messaging_1.getMessaging)().sendEachForMulticast({
+            tokens,
+            notification: { title, body },
+        });
+        res.json({ ok: true, sent: tokens.length });
+    }
+    catch (err) {
+        console.error("push/sendTest error", err);
+        res.status(500).json({ ok: false, error: err?.message || "internal error" });
     }
 });
 console.log("[server/app] module loaded.");
