@@ -6,6 +6,7 @@ import { useAuth } from '../../store/auth';
 import { upsertUser, setActivePhone } from '../../lib/profileStore';
 import { emit } from '../../lib/events';
 import { hydrateActiveFromCloud, pushActiveToCloud } from '../../lib/cloudProfile';
+import { track } from '../../lib/analytics';
 
 export default function Otp() {
   const nav = useNavigate();
@@ -53,6 +54,7 @@ export default function Otp() {
       // 🔄 notify the rest of app (AppShell, etc.)
       emit('bw:otp:verified', { phone: phoneE164 });
       emit('bw:auth:changed', null);
+      track('login_success', { mode, phone: phoneE164 });
 
       await hydrateActiveFromCloud().catch(() => {});
       await pushActiveToCloud().catch(() => {});

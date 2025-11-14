@@ -8,6 +8,8 @@ import { getBadgeCounts } from '../lib/badgeCounts';
 import CoinIcon from './CoinIcon';
 import { emit } from '../lib/events';
 import { manualLogout } from '../lib/session'; // ✅ NEW: single source of truth
+import BitewiseLogo from './BitewiseLogo';
+import { searchDishes } from '../lib/fuzzyDish';
 
 /* icons */
 function MicIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -54,6 +56,13 @@ function fire<T>(name: string, detail: T) {
     window.dispatchEvent(new CustomEvent(name, { detail }));
   } catch {}
 }
+
+type BotMessage = {
+  id: string;
+  from: 'bot' | 'user';
+  text: string;
+  suggestions?: string[];
+};
 
 export default function AppHeader() {
   const nav = useNavigate();
@@ -288,13 +297,63 @@ export default function AppHeader() {
 
   const tokens = Number(localStorage.getItem('bw.tokens') || '0');
 
+  /* YummiBot assistant */
+  const [botOpen, setBotOpen] = useState(false);
+  const [botInput, setBotInput] = useState('');
+  const [botTyping, setBotTyping] = useState(false);
+  const [botMessages, setBotMessages] = useState<BotMessage[]>([
+    {
+      id: 'bot-intro',
+      from: 'bot',
+      text: "Hey, I'm YummiBot. Ask me for dishes, cuisines, or what's trending!",
+    },
+  ]);
+
+  const pushBotMessage = (msg: BotMessage) => {
+    setBotMessages((prev) => [...prev, msg]);
+  };
+
+  const handleBotSend = () => {
+    const trimmed = botInput.trim();
+    if (!trimmed) return;
+    pushBotMessage({ id: `user-${Date.now()}`, from: 'user', text: trimmed });
+    setBotInput('');
+    setBotTyping(true);
+
+    setTimeout(() => {
+      const matches = searchDishes(trimmed, 3);
+      if (matches.length) {
+        pushBotMessage({
+          id: `bot-${Date.now()}`,
+          from: 'bot',
+          text: `Here’s what I can recommend for “${trimmed}”:`,
+          suggestions: matches.map(
+            (m) => `${m.dish.name}${m.dish.cuisines?.length ? ` · ${m.dish.cuisines[0]}` : ''}`
+          ),
+        });
+      } else {
+        pushBotMessage({
+          id: `bot-${Date.now()}`,
+          from: 'bot',
+          text: `Hmm, I couldn’t find “${trimmed}”. Try a different spelling or ask for a cuisine like “thai curry”.`,
+        });
+      }
+      setBotTyping(false);
+    }, 550);
+  };
+
+  const handleSuggestionClick = (label: string) => {
+    setBotInput(label);
+    setSuggest(computeSuggestion(label));
+  };
+
   return (
     <header className="w-full mx-auto mt-4">
       <div className="mx-auto w-full max-w-6xl grid grid-cols-[1fr_minmax(300px,640px)_auto] items-center gap-4">
         {/* Left */}
-        <div className="text-white">
-          <h1 className="text-2xl font-bold leading-tight">BiteWise</h1>
-          <p className="text-xs opacity-80 -mt-0.5">Eat! Save! Repeat!</p>
+        <div className="text-white space-y-1">
+          <BitewiseLogo />
+          <p className="text-xs opacity-80 -mt-1">Eat! Save! Repeat!</p>
           <p className="text-xs opacity-80 mt-2">
             Welcome, <span className="font-medium">{name}</span>
           </p>
@@ -512,12 +571,78 @@ export default function AppHeader() {
         </div>
       </div>
 
+      {/* Yummibot panel */}
+      {botOpen && (
+        <div className="fixed right-4 bottom-20 w-80 glass-card border border-white/10 p-4 backdrop-blur-lg z-50 shadow-2xl animate-fade-up">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+              <BurgerAvatar className="h-6 w-6" />
+              YummiBot
+            </div>
+            <button className="text-xs text-white/60 hover:text-white" onClick={() => setBotOpen(false)}>
+              Close
+            </button>
+          </div>
+          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
+            {botMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-line ${
+                  msg.from === 'bot'
+                    ? 'bg-white/10 text-white self-start'
+                    : 'bg-white text-black self-end'
+                }`}
+              >
+                {msg.text}
+                {msg.suggestions && (
+                  <ul className="mt-2 space-y-1 text-xs text-white/80">
+                    {msg.suggestions.map((line, idx) => (
+                      <li key={`${msg.id}-s-${idx}`}>
+                        <button
+                          className="underline decoration-dotted hover:text-white"
+                          onClick={() => handleSuggestionClick(line)}
+                        >
+                          {line}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+            {botTyping && (
+              <div className="px-3 py-2 rounded-2xl bg-white/10 text-xs text-white/80 self-start">
+                YummiBot is thinking…
+              </div>
+            )}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="text"
+              value={botInput}
+              onChange={(e) => setBotInput(e.target.value)}
+              className="flex-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+              placeholder="Ask for dishes or cuisines"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleBotSend();
+              }}
+            />
+            <button
+              className="rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-black"
+              onClick={handleBotSend}
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Floating Yummibot */}
       <button
         type="button"
         aria-label="Yummibot"
-        onClick={() => alert('Yummibot: Coming soon!')}
-        className="fixed right-4 bottom-4 h-12 w-12 grid place-items-center rounded-full shadow-lg bg-white/95 border z-50"
+        onClick={() => setBotOpen((v) => !v)}
+        className="fixed right-4 bottom-4 h-14 w-14 grid place-items-center rounded-full shadow-2xl border border-white/30 bg-gradient-to-br from-white via-pink-50 to-orange-100 text-black z-40"
       >
         <BurgerAvatar className="h-9 w-9" />
       </button>

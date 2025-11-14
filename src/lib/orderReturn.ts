@@ -8,6 +8,7 @@ import {
   markCompletion as apiMarkCompletion,
 } from './api';
 import { setTokens } from './tokens'; // <- existing setter from tokens.ts
+import { track } from './analytics';
 
 export type OutboundCtx = {
   id?: string;               // backend id from /api/orders/outbound
@@ -96,6 +97,11 @@ export async function startOutbound(ctx: OutboundCtx): Promise<void> {
       try {
         sessionStorage.setItem(KEY, JSON.stringify(withId));
       } catch {}
+      track('compare_outbound', {
+        platform: ctx.platform,
+        restaurant: ctx.restaurantName,
+        delta: ctx.delta ?? 0,
+      });
     }
   } catch {
     // swallow: local pending flow will still work
@@ -161,6 +167,12 @@ export async function confirmOrderPlaced(): Promise<{
     // 3) mark completion so backend can roll up savings, leaderboard, etc.
     if (ctx?.id) {
       await apiMarkCompletion(ctx.id, saved);
+      track('order_complete', {
+        platform: ctx.platform,
+        restaurant: ctx.restaurantName,
+        saved,
+        award,
+      });
     }
   } catch {
     // swallow; optimistic local state already updated

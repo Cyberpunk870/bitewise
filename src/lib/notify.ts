@@ -3,6 +3,7 @@
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { track } from "./analytics";
 
 /* ----------------------------- Constants ----------------------------- */
 const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY;
@@ -129,15 +130,17 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
     const last = localStorage.getItem(LS_LAST_PUSH_TOKEN) || "";
     if (last !== fcmToken) {
       try {
-        await postJSON(`/push/register`, {  // ✅ fixed here
+        await postJSON(`/push/register`, {
           token: fcmToken,
           platform: "web",
           phone_hint: phoneHint || null,
         });
         localStorage.setItem(LS_LAST_PUSH_TOKEN, fcmToken);
         console.log("✅ Push token registered");
+        track("push_registered", { phone: phoneHint || null });
       } catch (e) {
         console.warn("⚠️ Failed to register push token", e);
+        track("push_registration_failed", { reason: (e as Error)?.message });
       }
     }
 
@@ -148,6 +151,7 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
     } catch {}
   } catch (err) {
     console.warn("[notify] getToken failed", err);
+    track("push_registration_failed", { reason: (err as Error)?.message });
   }
 }
 

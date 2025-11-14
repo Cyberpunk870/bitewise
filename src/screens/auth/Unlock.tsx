@@ -8,6 +8,7 @@ import { emit } from '../../lib/events';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { hydrateActiveFromCloud } from '../../lib/cloudProfile';
 import { initOrRefreshPushOnAuth } from '../../lib/notify';
+import { track } from '../../lib/analytics';
 
 export default function Unlock() {
   const nav = useNavigate();
@@ -129,8 +130,10 @@ export default function Unlock() {
         await signInWithCustomToken(auth, customToken);
         console.log('✅ Firebase re-signed in via custom token');
         await initOrRefreshPushOnAuth(phone);
+        track('unlock_success', { phone });
       } catch (err) {
         console.warn('signInWithCustomToken failed', err);
+        track('mint_token_failed', { status: mintStatus || 'unknown', reason: (err as Error)?.message });
         toast.error('Could not restore your session. Please sign in again.');
         nav('/onboarding/auth/phone?mode=login', { replace: true });
         return;

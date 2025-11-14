@@ -10,6 +10,7 @@ import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore'
 import { emit, on } from '../lib/events';
 import { syncTokensFromCloud } from '../lib/tokens';
 import ReturnBanner from '../components/ReturnBanner';
+import InstallBanner from '../components/InstallBanner';
 // 🔄 Cloud profile
 import { hydrateActiveFromCloud, pushActiveToCloud } from '../lib/cloudProfile';
 // Passive live pings (no prompts)
@@ -266,11 +267,16 @@ export default function AppShell() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400">
-      <Outlet />
+    <div className="app-shell">
+      <div className="app-shell__aurora" aria-hidden="true" />
+      <div className="app-shell__noise" aria-hidden="true" />
+      <main className="app-shell__content">
+        <Outlet />
+      </main>
       <RewardHost />
       <ToastHost />
       <ReturnBanner />
+      <InstallBanner />
     </div>
   );
 }
