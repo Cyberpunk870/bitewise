@@ -8,6 +8,7 @@ import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 import router from './router';
 import './index.css';
+import './lib/firebase';
 
 import { getAuth } from "firebase/auth";
 (window as any).getAuth = getAuth;
