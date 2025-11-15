@@ -51,15 +51,15 @@ export default function Phone() {
   }
 
   return (
-    <div className="min-h-dvh grid place-items-center px-4">
+    <div className="min-h-dvh grid place-items-center px-4 text-white">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-4 shadow-lg animate-fade-up"
+        className="glass-card w-full max-w-md p-6 space-y-4 animate-fade-up"
       >
         <h1 className="text-2xl font-bold">
           {mode === 'signup' ? 'Create your account' : 'Welcome back'}
         </h1>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-white/70">
           Enter your phone to receive a one-time code.
         </p>
 
@@ -69,7 +69,7 @@ export default function Phone() {
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+91 98765 43210"
-          className="w-full rounded-xl border px-4 py-3 outline-none focus:ring"
+          className="w-full rounded-xl border border-white/15 px-4 py-3 outline-none focus:ring bg-white text-black"
         />
 
         {err && <p className="text-sm text-red-600">{err}</p>}
@@ -77,7 +77,7 @@ export default function Phone() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-xl py-3 font-semibold bg-black text-white disabled:opacity-50"
+          className="w-full rounded-xl py-3 font-semibold bg-white text-black disabled:opacity-50"
         >
           {submitting ? 'Sending…' : 'Send code'}
         </button>

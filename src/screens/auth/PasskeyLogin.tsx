@@ -45,7 +45,7 @@ export default function PasskeyLogin() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400 grid place-items-center">
+    <main className="min-h-screen grid place-items-center">
       <div className="w-[min(92vw,380px)] rounded-2xl border bg-white/95 shadow p-4 space-y-3">
         <h1 className="text-lg font-semibold">Unlock</h1>
         {reason === 'idle' && (

@@ -419,7 +419,7 @@ export default function Home() {
 
   /* ----- UI ----- */
   return (
-    <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400">
+    <main className="min-h-screen text-white pb-28 px-3">
       <div className="max-w-4xl mx-auto w-full max-w-6xl px-3 pb-28">
         <AppHeader />
 
@@ -437,8 +437,10 @@ export default function Home() {
               onClick={() => setActiveTab(t.key as TabKey)}
               className={[
                 'px-3 py-1.5 rounded-full text-sm border transition',
-                activeTab === t.key ? 'bg-black text-white border-black' : 'bg白/70 border-black/20',
-              ].join(' ').replace('白','white')} // keeps your style, avoids locale char issues
+                activeTab === t.key
+                  ? 'bg-white text-black border-white'
+                  : 'bg-white/10 text-white/80 border-white/20',
+              ].join(' ')}
             >
               {t.label}
             </button>
@@ -497,24 +499,24 @@ export default function Home() {
 
         {/* Location modal */}
         {isLocModalOpen && (
-          <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/40">
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w/full max-w-md">
-              <div className="rounded-2xl border bg-white p-4">
-                <p className="font-semibold mb-2">Kindly update your location</p>
-                <p className="text-sm opacity-70 mb-4">
+          <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md px-4">
+              <div className="glass-card border-white/10 text-white p-5">
+                <p className="font-semibold mb-2">Update your location</p>
+                <p className="text-sm text-white/70 mb-4">
                   {actLabel
                     ? `You're ~${actLabel} from your saved address. Update for accurate prices.`
                     : 'Update your location for accurate prices.'}
                 </p>
                 <div className="flex gap-2 justify-end">
                   <button
-                    className="rounded-xl border px-3 py-2 text-sm"
+                    className="rounded-xl border border-white/30 px-3 py-2 text-sm text-white/80"
                     onClick={() => setLocModalOpen(false)}
                   >
                     Not now
                   </button>
                   <button
-                    className="rounded-xl border px-3 py-2 text-sm bg-black text-white"
+                    className="rounded-xl px-3 py-2 text-sm bg-white text-black font-semibold"
                     onClick={async () => {
                       await onLocationChanged();
                       setLocModalOpen(false);
@@ -532,4 +534,3 @@ export default function Home() {
     </main>
   );
 }
-

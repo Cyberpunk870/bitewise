@@ -419,7 +419,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-pink-500 to-orange-400 px-4 py-6">
+    <div className="min-h-dvh px-4 py-6">
       <div className="mx-auto max-w-3xl space-y-6 animate-fade-up">
         {/* Header */}
         <div className="text-white">

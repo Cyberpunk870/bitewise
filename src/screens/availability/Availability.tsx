@@ -330,7 +330,7 @@ export default function Availability() {
   ]);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400 pb-16">
+    <main className="min-h-screen pb-16">
       {/* When location is DENIED, show blocker. We don't early-return the component
          so hook order above stays stable. */}
       {blocked ? (

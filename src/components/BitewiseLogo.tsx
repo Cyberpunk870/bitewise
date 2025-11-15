@@ -54,7 +54,7 @@ export default function BitewiseLogo({ size = 42 }: { size?: number }) {
           </span>
         </span>
         <span className="text-xs uppercase tracking-[0.3em] text-white/60">
-          Eat smarter
+          Eat • Save • Repeat
         </span>
       </div>
     </div>

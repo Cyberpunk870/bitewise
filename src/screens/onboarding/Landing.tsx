@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function Landing() {
   const nav = useNavigate();
   return (
-    <div className="min-h-[75dvh] grid place-items-center p-6 bg-gradient-to-br from-pink-500 to-orange-400">
+    <div className="min-h-[75dvh] grid place-items-center p-6">
       <div className="text-center space-y-6">
         <div>
           <div className="text-5xl font-extrabold text-white tracking-tight">BiteWise</div>

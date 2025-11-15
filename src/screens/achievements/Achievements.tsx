@@ -17,7 +17,7 @@ export default function Achievements() {
   const list = useMemo(() => ACHIEVEMENTS.map(a => ({ ...a, unlocked: a.unlock(state) })), [state]);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400">
+    <main className="min-h-screen">
       <div className="max-w-3xl mx-auto px-4 py-6">
         <header className="flex items-center justify-between mb-4">
           <button className="px-3 py-1.5 text-sm rounded-full border bg-white/80" onClick={() => nav(-1)}>← Back</button>

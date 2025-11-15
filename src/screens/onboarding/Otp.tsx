@@ -76,13 +76,13 @@ export default function Otp() {
   }
 
   return (
-    <div className="min-h-dvh grid place-items-center px-4">
+    <div className="min-h-dvh grid place-items-center px-4 text-white">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-4 shadow-lg animate-fade-up"
+        className="glass-card w-full max-w-md p-6 space-y-4 animate-fade-up"
       >
         <h1 className="text-2xl font-bold">Enter the code</h1>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-white/70">
           We sent an SMS to {phone || 'your number'}.
         </p>
 
@@ -92,7 +92,7 @@ export default function Otp() {
           value={code}
           onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, ''))}
           placeholder="6-digit code"
-          className="w-full rounded-xl border px-4 py-3 tracking-widest text-center text-lg outline-none focus:ring"
+          className="w-full rounded-xl border border-white/15 px-4 py-3 tracking-widest text-center text-lg outline-none bg-white text-black focus:ring"
         />
 
         {err && <p className="text-sm text-red-600">{err}</p>}
@@ -100,7 +100,7 @@ export default function Otp() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-xl py-3 font-semibold bg-black text-white disabled:opacity-50"
+          className="w-full rounded-xl py-3 font-semibold bg-white text-black disabled:opacity-50"
         >
           {submitting ? 'Verifying…' : 'Verify'}
         </button>

@@ -72,11 +72,11 @@ export default function SetPasskey() {
   const disabled = busy;
 
   return (
-    <div className="min-h-dvh grid place-items-center bg-gradient-to-br from-pink-500 to-orange-400 px-4 py-8">
-      <div className="w-full max-w-md rounded-2xl bg-white/80 backdrop-blur p-6 shadow animate-fade-up">
-        <div className="text-center">
+    <div className="min-h-dvh grid place-items-center px-4 py-8 text-white">
+      <div className="glass-card w-full max-w-md p-6 animate-fade-up space-y-5">
+        <div className="text-center space-y-1">
           <h1 className="text-2xl font-extrabold">Set Quick Unlock Passkey</h1>
-          <p className="text-sm opacity-80 mt-1">
+          <p className="text-sm text-white/70">
             {existing
               ? 'Update your device-local passkey to quickly unlock after idle.'
               : 'Create a device-local passkey to quickly unlock after idle.'}
@@ -85,13 +85,13 @@ export default function SetPasskey() {
 
         <div className="mt-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium">New passkey</label>
+            <label className="block text-sm font-medium text-white/80">New passkey</label>
             <input
               ref={inputRef}
               type="password"
               inputMode="numeric"
               autoComplete="new-password"
-              className="mt-1 w-full rounded-xl border border-black/10 dark:border-white/20 bg-white/80 dark:bg-white/10 px-3 py-2 outline-none"
+              className="mt-1 w-full rounded-xl border border-white/15 bg-white text-black px-3 py-2 outline-none"
               placeholder="Enter passkey (min 4 chars)"
               value={p1}
               onChange={(e) => setP1(e.target.value.slice(0, 32))}
@@ -99,36 +99,39 @@ export default function SetPasskey() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Confirm passkey</label>
+            <label className="block text-sm font-medium text-white/80">Confirm passkey</label>
             <input
               type="password"
               inputMode="numeric"
               autoComplete="new-password"
-              className="mt-1 w-full rounded-xl border border-black/10 dark:border-white/20 bg-white/80 dark:bg-white/10 px-3 py-2 outline-none "
+              className="mt-1 w-full rounded-xl border border-white/15 bg-white text-black px-3 py-2 outline-none"
               placeholder="Re-enter passkey"
               value={p2}
               onChange={(e) => setP2(e.target.value.slice(0, 32))}
               disabled={disabled}
             />
           </div>
-          <p className="text-xs opacity-70">
+          <p className="text-xs text-white/70">
             This passkey is stored only on this device. It is not your account password and does not sync to the cloud.
           </p>
           {!valid && (p1.length > 0 || p2.length > 0) ? (
-            <div className="text-xs text-red-700/90">
+            <div className="text-xs text-red-300">
               Passkeys must match and be at least {minLen} characters.
             </div>
           ) : null}
         </div>
 
         <div className="mt-6 flex items-center justify-between">
-          <Link to={computesafeBack()} className="px-3 py-2 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20 text-sm">
+          <Link
+            to={computesafeBack()}
+            className="px-3 py-2 rounded-xl border border-white/20 text-sm text-white/80 hover:text-white"
+          >
             Skip for now
           </Link>
           <button
             onClick={onSave}
             disabled={busy || !valid}
-            className="px-4 py-2 rounded-xl bg-black/80 text-white hover:bg-black disabled:opacity-50 text-sm"
+            className="px-4 py-2 rounded-xl bg-white text-black hover:bg-white/90 disabled:opacity-50 text-sm font-semibold"
           >
             {busy ? 'Saving…' : existing ? 'Update Passkey' : 'Save Passkey'}
           </button>

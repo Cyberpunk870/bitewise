@@ -6,29 +6,29 @@ export default function Welcome() {
   const nav = useNavigate();
 
   return (
-    <div className="min-h-dvh grid place-items-center bg-gradient-to-br from-pink-500 to-orange-400 px-4 py-8">
-      <div className="w-full max-w-sm rounded-2xl bg-white/85 dark:bg-white/10 backdrop-blur p-6 shadow animate-fade-up">
+    <div className="min-h-dvh grid place-items-center px-4 py-8">
+      <div className="glass-card w-full max-w-sm p-6 animate-fade-up text-white space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-3xl font-extrabold">BiteWise</h1>
-          <p className="text-sm opacity-80">Eat! Save! Repeat!</p>
+          <p className="text-sm text-white/80">Eat! Save! Repeat!</p>
         </div>
 
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
           <button
             onClick={() => nav('/onboarding/auth/phone?mode=signup')}
-            className="w-full rounded-xl bg-black text-white py-3"
+            className="w-full rounded-xl bg-white text-black py-3 font-semibold"
           >
             Sign up
           </button>
           <button
             onClick={() => nav('/onboarding/auth/phone?mode=login')}
-            className="w-full rounded-xl border py-3"
+            className="w-full rounded-xl border border-white/30 py-3 text-white/90"
           >
             Log in
           </button>
         </div>
 
-        <p className="mt-4 text-xs text-center opacity-70">
+        <p className="text-xs text-center text-white/70">
           Continue to verify your phone with an OTP.
         </p>
       </div>

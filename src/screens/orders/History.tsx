@@ -45,7 +45,7 @@ export default function History() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400">
+    <main className="min-h-screen">
       <div className="max-w-3xl mx-auto px-4 py-6">
         <header className="flex items-center justify-between mb-4">
           <button

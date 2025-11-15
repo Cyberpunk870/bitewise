@@ -79,7 +79,7 @@ export default function Compare() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-pink-500 to-orange-400 pb-20">
+    <main className="min-h-screen pb-20">
       <div className="max-w-4xl mx-auto w-full px-4 pt-6">
         {/* header */}
         <div className="flex items-center justify-between mb-2">
