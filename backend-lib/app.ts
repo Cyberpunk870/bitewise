@@ -219,7 +219,7 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
   }
 });
 
-app.get("/public/check-phone", async (req, res) => {
+app.get("/api/public/check-phone", async (req, res) => {
   try {
     const raw = typeof req.query?.phone === "string" ? req.query.phone : "";
     const phone = raw.replace(/\s+/g, "");

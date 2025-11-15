@@ -4,7 +4,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ensureRecaptcha, sendOtp, clearRecaptcha } from '../../lib/firebase';
 import { useAuth } from '../../store/auth';
 
-const PUBLIC_BASE = import.meta.env.DEV ? 'http://localhost:3000/public' : '/public';
+const API_BASE_RAW = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://localhost:3000/api' : '/api');
+const API_BASE = API_BASE_RAW.endsWith('/') ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
+const PUBLIC_BASE = `${API_BASE}/public`;
 
 async function isPhoneTaken(phone: string) {
   const url = `${PUBLIC_BASE}/check-phone?phone=${encodeURIComponent(phone)}`;
