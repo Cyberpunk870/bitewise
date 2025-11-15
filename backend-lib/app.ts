@@ -221,6 +221,7 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
 
 app.get("/api/public/check-phone", async (req, res) => {
   try {
+    ensureAdmin();
     const raw = typeof req.query?.phone === "string" ? req.query.phone : "";
     const phone = raw.replace(/\s+/g, "");
     if (!phone) {
@@ -232,9 +233,9 @@ app.get("/api/public/check-phone", async (req, res) => {
       .limit(1)
       .get();
     return res.json({ ok: true, exists: !snap.empty });
-  } catch (err) {
+  } catch (err: any) {
     console.error("[public/check-phone] error", err);
-    return res.status(500).json({ ok: false, error: "internal error" });
+    return res.status(500).json({ ok: false, error: err?.message || "internal error" });
   }
 });
 
