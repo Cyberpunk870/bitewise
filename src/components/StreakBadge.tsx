@@ -12,6 +12,26 @@ const TIERS = [
   { min: 1, label: 'Spark', colors: 'from-[#34d399] via-[#4ade80] to-[#a5b4fc]', icon: '✨' },
 ];
 
+const streakCtx = React.createContext<MissionStats>({
+  streak: { current: 0, best: 0, lastDay: null },
+  totalCompleted: 0,
+});
+
+export function useMissionStats() {
+  return React.useContext(streakCtx);
+}
+
+export const MissionStatsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [stats, setStats] = React.useState<MissionStats>(getMissionStats());
+
+  React.useEffect(() => {
+    const off = on<MissionStats>('bw:missions:stats', (detail) => setStats(detail));
+    return () => off();
+  }, []);
+
+  return <streakCtx.Provider value={stats}>{children}</streakCtx.Provider>;
+};
+
 export default function StreakBadge({ value, best }: Props) {
   const tier = TIERS.find((t) => value >= t.min) ?? TIERS[TIERS.length - 1];
 

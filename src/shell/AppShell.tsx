@@ -5,6 +5,7 @@ import { getAuth, signOut } from 'firebase/auth';
 import ToastHost from '../components/ToastHost';
 import RewardHost from '../components/RewardHost';
 import ConfettiBurst from '../components/ConfettiBurst';
+import { MissionStatsProvider } from '../components/StreakBadge';
 import { clearSessionPerms, decidePerm } from '../lib/permPrefs';
 import { startTaskEngine } from '../lib/TaskEngine';
 import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
@@ -268,17 +269,19 @@ export default function AppShell() {
   }, []);
 
   return (
-    <div className="app-shell">
-      <div className="app-shell__aurora" aria-hidden="true" />
-      <div className="app-shell__noise" aria-hidden="true" />
-      <main className="app-shell__content">
-        <Outlet />
-      </main>
-      <ConfettiBurst />
-      <RewardHost />
-      <ToastHost />
-      <ReturnBanner />
-      <InstallBanner />
-    </div>
+    <MissionStatsProvider>
+      <div className="app-shell">
+        <div className="app-shell__aurora" aria-hidden="true" />
+        <div className="app-shell__noise" aria-hidden="true" />
+        <main className="app-shell__content">
+          <Outlet />
+        </main>
+        <ConfettiBurst />
+        <RewardHost />
+        <ToastHost />
+        <ReturnBanner />
+        <InstallBanner />
+      </div>
+    </MissionStatsProvider>
   );
 }

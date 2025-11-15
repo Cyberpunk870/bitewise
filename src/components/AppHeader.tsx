@@ -1,5 +1,5 @@
 // src/components/AppHeader.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useCart from '../store/cart'; // ✅ default import (not { useCart })
 import { getActiveProfile } from '../lib/profileStore';
@@ -10,6 +10,7 @@ import { emit } from '../lib/events';
 import { manualLogout } from '../lib/session'; // ✅ NEW: single source of truth
 import BitewiseLogo from './BitewiseLogo';
 import { searchDishes } from '../lib/fuzzyDish';
+import type { BotMessage as PanelMessage } from './YummiBotPanel';
 
 /* icons */
 function MicIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -63,6 +64,8 @@ type BotMessage = {
   text: string;
   suggestions?: string[];
 };
+
+const BotShell = React.lazy(() => import('./YummiBotPanel'));
 
 export default function AppHeader() {
   const nav = useNavigate();
@@ -301,7 +304,7 @@ export default function AppHeader() {
   const [botOpen, setBotOpen] = useState(false);
   const [botInput, setBotInput] = useState('');
   const [botTyping, setBotTyping] = useState(false);
-  const [botMessages, setBotMessages] = useState<BotMessage[]>([
+  const [botMessages, setBotMessages] = useState<PanelMessage[]>([
     {
       id: 'bot-intro',
       from: 'bot',
@@ -581,70 +584,18 @@ export default function AppHeader() {
         </div>
       </div>
 
-      {/* Yummibot panel */}
       {botOpen && (
-        <div className="fixed right-4 bottom-20 w-80 glass-card border border-white/10 p-4 backdrop-blur-lg z-50 shadow-2xl animate-fade-up">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-white">
-              <BurgerAvatar className="h-6 w-6" />
-              YummiBot
-            </div>
-            <button className="text-xs text-white/60 hover:text-white" onClick={() => setBotOpen(false)}>
-              Close
-            </button>
-          </div>
-          <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
-            {botMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-line ${
-                  msg.from === 'bot'
-                    ? 'bg-white/10 text-white self-start'
-                    : 'bg-white text-black self-end'
-                }`}
-              >
-                {msg.text}
-                {msg.suggestions && (
-                  <ul className="mt-2 space-y-1 text-xs text-white/80">
-                    {msg.suggestions.map((line, idx) => (
-                      <li key={`${msg.id}-s-${idx}`}>
-                        <button
-                          className="underline decoration-dotted hover:text-white"
-                          onClick={() => handleSuggestionClick(line)}
-                        >
-                          {line}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-            {botTyping && (
-              <div className="px-3 py-2 rounded-2xl bg-white/10 text-xs text-white/80 self-start">
-                YummiBot is thinking…
-              </div>
-            )}
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <input
-              type="text"
-              value={botInput}
-              onChange={(e) => setBotInput(e.target.value)}
-              className="flex-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
-              placeholder="Ask for dishes or cuisines"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleBotSend();
-              }}
-            />
-            <button
-              className="rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-black"
-              onClick={handleBotSend}
-            >
-              Send
-            </button>
-          </div>
-        </div>
+        <Suspense fallback={null}>
+          <BotShell
+            onClose={() => setBotOpen(false)}
+            messages={botMessages}
+            typing={botTyping}
+            input={botInput}
+            onInput={setBotInput}
+            onSend={handleBotSend}
+            onSuggestion={handleSuggestionClick}
+          />
+        </Suspense>
       )}
 
       {/* Floating Yummibot */}
