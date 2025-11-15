@@ -35,8 +35,8 @@
     return (
       <div
         className={[
-          'group relative rounded-2xl bg-white/90 shadow border p-3 transition',
-          selected ? 'ring-2 ring-black' : '',
+          'group relative rounded-2xl bg-white/10 text-white border border-white/15 backdrop-blur transition shadow-lg',
+          selected ? 'ring-2 ring-white/70' : '',
         ].join(' ')}
         onClick={() => onSelect(d.id)}
         role="button"
@@ -83,9 +83,9 @@
           )}
         </div>
   
-        <p className="text-sm font-medium truncate">{d.name}</p>
+        <p className="text-sm font-medium truncate text-white">{d.name}</p>
         {d.cuisine ? (
-          <p className="text-xs text-gray-600">{d.cuisine}</p>
+          <p className="text-xs text-white/70">{d.cuisine}</p>
         ) : null}
       </div>
     );

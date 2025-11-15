@@ -102,6 +102,9 @@ function Tile({
   onCompare: (r: RestaurantAvailability) => void;
 }) {
   const both = r.swiggy.available && r.zomato.available;
+  const availablePlatforms = (['swiggy', 'zomato'] as const).filter(
+    (p) => (r as any)[p]?.available
+  );
   const price = bestPrice(r);
   const eta = bestEta(r);
   const offer = bestOfferText(r);
@@ -111,18 +114,27 @@ function Tile({
   const firstMatchedName =
     matchedDishNames[0] || (r as any).dishName || 'dish';
 
+  const openPlatform = (platform: 'swiggy' | 'zomato') => {
+    const breakdown =
+      r.priceBreakdown?.find((b) => b.platform === platform)?.deepLink ||
+      (platform === 'swiggy'
+        ? 'https://www.swiggy.com/'
+        : 'https://www.zomato.com/');
+    window.open(breakdown, '_blank', 'noopener');
+  };
+
   return (
-    <div className="relative rounded-2xl border bg-white shadow-sm overflow-hidden">
+    <div className="relative rounded-2xl border border-white/15 bg-white/10 text-white overflow-hidden backdrop-blur">
       <RotatingDishImage
         names={[String(firstMatchedName)]}
         fallback={(r as any).heroImage ?? ''}
         intervalMs={3000}
       />
 
-      <div className="p-3">
+      <div className="p-3 space-y-1">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold line-clamp-2">{r.name}</h3>
-          <div className="text-sm text-green-600 flex items-center gap-1">
+          <div className="text-sm text-lime-200 flex items-center gap-1">
             ⭐ {r.rating.toFixed(1)}{' '}
             <span className="opacity-60 text-xs">
               ({formatCount(reviewCount)})
@@ -130,7 +142,7 @@ function Tile({
           </div>
         </div>
 
-        <div className="text-xs opacity-70 mb-1">
+        <div className="text-xs text-white/70 mb-1">
           {eta ? `${eta} mins` : '—'} • {r.distanceKm} km
         </div>
 
@@ -139,19 +151,31 @@ function Tile({
         </div>
 
         {offer && (
-          <div className="text-xs text-rose-600 font-medium mt-1">{offer}</div>
+          <div className="text-xs text-rose-200 font-medium mt-1">{offer}</div>
         )}
       </div>
 
-      {both && (
-        <button
-          className="absolute right-3 top-3 text-xs px-3 py-1 rounded-full bg-black text-white"
-          onClick={() => onCompare(r)}
-          aria-label={`Compare ${r.name}`}
-        >
-          Compare
-        </button>
-      )}
+      <div className="absolute right-3 top-3 flex gap-2">
+        {both ? (
+          <button
+            className="text-xs px-3 py-1 rounded-full bg-white text-black font-semibold shadow"
+            onClick={() => onCompare(r)}
+            aria-label={`Compare ${r.name}`}
+          >
+            Compare
+          </button>
+        ) : (
+          availablePlatforms.map((platform) => (
+            <button
+              key={platform}
+              className="text-xs px-3 py-1 rounded-full bg-white/90 text-black font-semibold shadow"
+              onClick={() => openPlatform(platform)}
+            >
+              {platform === 'swiggy' ? 'Swiggy' : 'Zomato'}
+            </button>
+          ))
+        )}
+      </div>
 
       {typeof price === 'number' && (
         <div className="absolute left-3 top-3 text-xs px-2 py-1 rounded-full bg-black/60 text-white">

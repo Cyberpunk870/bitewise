@@ -353,7 +353,6 @@ export default function AppHeader() {
         {/* Left */}
         <div className="text-white space-y-1">
           <BitewiseLogo />
-          <p className="text-xs opacity-80 -mt-1">Eat! Save! Repeat!</p>
           <p className="text-xs opacity-80 mt-2">
             Welcome, <span className="font-medium">{name}</span>
           </p>
