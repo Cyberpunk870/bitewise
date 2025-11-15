@@ -1,5 +1,7 @@
 // src/lib/notifications.ts
 import { emit } from './events';
+import { getAuth } from 'firebase/auth';
+import { getActivePhone } from './profileStore';
 
 export type NoticeKind = 'price' | 'tasks' | 'savings' | 'milestone' | 'system';
 export type Notice = {
@@ -32,7 +34,21 @@ export function setInbox(list: Notice[]) {
   emit('bw:badges:update', null);
 }
 
+function canNotify(): boolean {
+  try {
+    if (sessionStorage.getItem('bw.session.phone')) return true;
+  } catch {}
+  try {
+    if (getAuth().currentUser) return true;
+  } catch {}
+  try {
+    if (getActivePhone()) return true;
+  } catch {}
+  return false;
+}
+
 export function addNotice(n: Omit<Notice, 'id'|'ts'> & Partial<Pick<Notice,'id'|'ts'>>) {
+  if (!canNotify()) return undefined;
   const item: Notice = { id: n.id || crypto.randomUUID(), ts: n.ts || Date.now(), read: false, ...n };
   const list = [item, ...getInbox()];
   setInbox(list);

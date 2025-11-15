@@ -197,6 +197,25 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
         return res.status(500).json({ ok: false, error: "internal error" });
     }
 });
+app.get("/public/check-phone", async (req, res) => {
+    try {
+        const raw = typeof req.query?.phone === "string" ? req.query.phone : "";
+        const phone = raw.replace(/\s+/g, "");
+        if (!phone) {
+            return res.status(400).json({ ok: false, error: "phone required" });
+        }
+        const snap = await (0, firestore_1.getFirestore)()
+            .collection("users")
+            .where("phone", "==", phone)
+            .limit(1)
+            .get();
+        return res.json({ ok: true, exists: !snap.empty });
+    }
+    catch (err) {
+        console.error("[public/check-phone] error", err);
+        return res.status(500).json({ ok: false, error: "internal error" });
+    }
+});
 /* -------------------- Secure Middleware -------------------- */
 app.use("/api", ensureAdminMiddleware);
 app.use("/api", verifyAuth_1.verifyAuth);

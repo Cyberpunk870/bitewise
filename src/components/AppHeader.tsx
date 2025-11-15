@@ -352,12 +352,12 @@ export default function AppHeader() {
       <div className="mx-auto w-full max-w-6xl grid grid-cols-[1fr_minmax(300px,640px)_auto] items-center gap-4">
         {/* Left */}
         <div className="text-white space-y-1">
-          <BitewiseLogo />
-          <p className="text-xs opacity-80 mt-2">
+          <BitewiseLogo showTagline={false} />
+          <p className="text-xs text-white/70 mt-2">
             Welcome, <span className="font-medium">{name}</span>
           </p>
           {!!(addressLine || addressLabel) && (
-            <p className="text-xs opacity-80">
+            <p className="text-xs text-white/60">
               {addressLabel ? <span className="font-medium">{addressLabel}</span> : null}
               {addressLabel && addressLine ? ' — ' : ''}
               {addressLine}
@@ -368,7 +368,7 @@ export default function AppHeader() {
         {/* Center: search */}
         <div className="relative">
           {/* ghost suggestion */}
-          <div className="pointer-events-none absolute inset-0 flex items-center px-4 text-black/30 select-none">
+          <div className="pointer-events-none absolute inset-0 flex items-center px-4 text-white/25 select-none">
             {inputValue && suggest ? (
               <>
                 <span className="opacity-0">{inputValue}</span>
@@ -378,7 +378,7 @@ export default function AppHeader() {
           </div>
           <input
             type="search"
-            className="w-full rounded-xl border px-4 py-2 pr-20 bg-white/95 text-black shadow relative"
+            className="w-full rounded-xl border border-white/15 px-4 py-2 pr-20 bg-white/5 text-white shadow-[0_15px_45px_rgba(4,9,20,0.35)] backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/15 placeholder:text-white/40"
             placeholder={placeholder}
             value={inputValue}
             onChange={(e) => onInputChange(e.target.value)}
@@ -390,7 +390,7 @@ export default function AppHeader() {
           {inputValue && (
             <button
               type="button"
-              className="absolute right-10 top-1/2 -translate-y-1/2 h-7 w-7 grid place-items-center rounded-md bg-black/10 hover:bg-black/15"
+              className="absolute right-10 top-1/2 -translate-y-1/2 h-7 w-7 grid place-items-center rounded-md bg-white/10 text-white/80 hover:bg-white/20"
               onClick={clearInput}
               aria-label="Clear search"
             >
@@ -399,7 +399,7 @@ export default function AppHeader() {
           )}
           <button
             type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg border bg-white/90"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg border border-white/20 bg-white/10 text-white hover:bg-white/20 transition"
             onClick={handleVoice}
             aria-label="Voice search"
             title="Voice search"
@@ -415,7 +415,7 @@ export default function AppHeader() {
               emit('bw:open:tasks', null);
               nav('/tasks');
             }}
-            className="h-9 min-w-[48px] px-2 grid grid-cols-[16px_auto] items-center gap-1 rounded-full border bg-white/90 shadow"
+            className="h-9 min-w-[48px] px-3 grid grid-cols-[16px_auto] items-center gap-1 rounded-full border border-white/15 bg-white/10 text-white shadow-[0_10px_30px_rgba(5,9,20,0.35)]"
             title="Your Bites"
             aria-label="Your Bites"
           >
@@ -425,14 +425,14 @@ export default function AppHeader() {
 
           <button
             type="button"
-            className="relative h-9 w-10 grid place-items-center rounded-xl border bg-white/90 shadow"
+            className="relative h-9 w-10 grid place-items-center rounded-xl border border-white/15 bg-white/10 text-white shadow-[0_10px_30px_rgba(5,9,20,0.35)]"
             onClick={() => nav('/cart')}
             title="Cart"
             aria-label="Cart"
           >
             <CartIcon />
             {count > 0 && (
-              <span className="absolute translate-x-3 -translate-y-3 text-xs bg-black text-white rounded-full px-1">
+              <span className="absolute translate-x-3 -translate-y-3 text-[10px] bg-rose-500 text-white rounded-full px-1 py-0.5">
                 {count}
               </span>
             )}
@@ -442,7 +442,7 @@ export default function AppHeader() {
           <div className="relative" ref={menuRef}>
             <button
               type="button"
-              className="h-9 w-10 grid place-items-center rounded-xl border bg-white/90 shadow"
+              className="h-9 w-10 grid place-items-center rounded-xl border border-white/15 bg-white/10 text-white shadow-[0_10px_30px_rgba(5,9,20,0.35)]"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
               aria-haspopup="menu"
@@ -453,60 +453,62 @@ export default function AppHeader() {
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 top-full mt-2 w-[320px] max-h-[70vh] overflow-auto rounded-2xl border bg-white/95 shadow p-2 z-50"
+                className="absolute right-0 top-full mt-2 w-[320px] max-h-[70vh] overflow-auto rounded-2xl border border-white/15 bg-[rgba(6,12,25,0.95)] backdrop-blur-2xl shadow-[0_25px_60px_rgba(3,7,15,0.7)] p-2 z-50 text-white"
               >
                 <div className="grid gap-2">
                   <Link
                     to="/notifications"
                     onClick={() => setMenuOpen(false)}
-                    className="relative block rounded-xl px-3 py-2 hover:bg-black/5"
+                    className="relative block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
                   >
                     Notifications
                   </Link>
                   <Link
                     to="/tasks"
                     onClick={() => setMenuOpen(false)}
-                    className="relative block rounded-xl px-3 py-2 hover:bg-black/5"
+                    className="relative block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
                   >
-                    Tasks
+                    Missions
                   </Link>
                   <Link
                     to="/leaderboard"
                     onClick={() => setMenuOpen(false)}
-                    className="relative block rounded-xl px-3 py-2 hover:bg-black/5"
+                    className="relative block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
                   >
                     Leaderboard
                   </Link>
                   <Link
                     to="/achievements"
                     onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-2 hover:bg-black/5"
+                    className="block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
                   >
                     Achievements
                   </Link>
                   <Link
                     to="/orders/history"
                     onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-2 hover:bg-black/5"
+                    className="block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
                   >
                     Order history
                   </Link>
                   <Link
                     to="/settings"
                     onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-2 hover:bg-black/5"
+                    className="block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
                   >
                     Settings
                   </Link>
 
                   {/* Filters */}
-                  <details className="mt-1 rounded-xl border bg-white/95 open:shadow-sm">
-                    <summary className="cursor-pointer px-3 py-2 rounded hover:bg-black/5 select-none">Filter</summary>
+                  <details className="mt-1 rounded-xl border border-white/15 bg-white/5 open:shadow-inner">
+                    <summary className="cursor-pointer px-3 py-2 rounded text-sm text-white/90 hover:bg-white/10 select-none">
+                      Filter
+                    </summary>
                     <div className="p-3 pt-1 grid gap-4">
                       <div>
                         <div className="flex items-center justify-between">
-                          <p className="font-medium">Price</p>
-                          <p className="text-xs opacity-70">≤ ₹{priceMax}</p>
+                          <p className="font-medium text-white">Price</p>
+                          <p className="text-xs text-white/60">≤ ₹{priceMax}</p>
                         </div>
                         <input
                           type="range"
@@ -514,14 +516,14 @@ export default function AppHeader() {
                           max={1500}
                           step={10}
                           value={priceMax}
-                          className="w-full"
+                          className="w-full accent-pink-200"
                           onChange={(e) => setPriceMax(Number(e.target.value))}
                         />
                       </div>
                       <div>
                         <div className="flex items-center justify-between">
-                          <p className="font-medium">Rating</p>
-                          <p className="text-xs opacity-70">≥ {ratingMin.toFixed(1)}</p>
+                          <p className="font-medium text-white">Rating</p>
+                          <p className="text-xs text-white/60">≥ {ratingMin.toFixed(1)}</p>
                         </div>
                         <input
                           type="range"
@@ -529,14 +531,14 @@ export default function AppHeader() {
                           max={5}
                           step={0.1}
                           value={ratingMin}
-                          className="w-full"
+                          className="w-full accent-pink-200"
                           onChange={(e) => setRatingMin(Number(e.target.value))}
                         />
                       </div>
                       <div>
                         <div className="flex items-center justify-between">
-                          <p className="font-medium">Distance</p>
-                          <p className="text-xs opacity-70">≤ {distanceMax} km</p>
+                          <p className="font-medium text-white">Distance</p>
+                          <p className="text-xs text-white/60">≤ {distanceMax} km</p>
                         </div>
                         <input
                           type="range"
@@ -544,15 +546,21 @@ export default function AppHeader() {
                           max={20}
                           step={1}
                           value={distanceMax}
-                          className="w-full"
+                          className="w-full accent-pink-200"
                           onChange={(e) => setDistanceMax(Number(e.target.value))}
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <button className="px-3 py-2 rounded border" onClick={resetFilters}>
+                        <button
+                          className="px-3 py-2 rounded border border-white/20 text-white/80 hover:bg-white/10"
+                          onClick={resetFilters}
+                        >
                           Reset
                         </button>
-                        <button className="px-4 py-2 rounded-xl bg-black text-white" onClick={applyFilters}>
+                        <button
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] font-semibold shadow-lg shadow-rose-500/30"
+                          onClick={applyFilters}
+                        >
                           Done
                         </button>
                       </div>
@@ -560,7 +568,10 @@ export default function AppHeader() {
                   </details>
 
                   {/* Logout */}
-                  <button className="mt-1 w-full px-3 py-2 rounded bg-black text-white" onClick={logout}>
+                  <button
+                    className="mt-1 w-full px-3 py-2 rounded-xl border border-white/20 bg-white/5 text-white hover:bg-white/10 transition"
+                    onClick={logout}
+                  >
                     Log out
                   </button>
                 </div>
@@ -641,7 +652,7 @@ export default function AppHeader() {
         type="button"
         aria-label="Yummibot"
         onClick={() => setBotOpen((v) => !v)}
-        className="fixed right-4 bottom-4 h-14 w-14 grid place-items-center rounded-full shadow-2xl border border-white/30 bg-gradient-to-br from-white via-pink-50 to-orange-100 text-black z-40"
+        className="fixed right-4 bottom-4 h-14 w-14 grid place-items-center rounded-full shadow-2xl border border-white/20 bg-white/10 text-white z-40 backdrop-blur"
       >
         <BurgerAvatar className="h-9 w-9" />
       </button>

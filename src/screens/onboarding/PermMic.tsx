@@ -106,21 +106,23 @@ export default function PermMic() {
 
   return (
     <div className="min-h-dvh grid place-items-center px-4">
-      <div className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-5 shadow-lg animate-fade-up">
-        <h1 className="text-2xl font-bold">Voice Search (Mic)</h1>
-        <p className="text-sm text-gray-600">
-          Enable microphone to try voice search and quick actions.
-        </p>
+      <div className="glass-card w-full max-w-md p-6 space-y-5 text-white animate-fade-up">
+        <div className="space-y-2 text-center">
+          <h1 className="text-2xl font-bold">Voice Search (Mic)</h1>
+          <p className="text-sm text-white/70">
+            Enable microphone to try voice search and quick actions.
+          </p>
+        </div>
 
         {unsupported && (
-          <div className="rounded-xl border p-3 text-sm">
+          <div className="rounded-xl border border-white/15 bg-white/5 p-3 text-sm text-white/80">
             Microphone / Media APIs aren’t supported in this browser or context (HTTPS required). You can continue without them.
           </div>
         )}
 
-        {/* Show current decision for quick debugging/testing (optional) */}
-        <div className="text-xs text-gray-500">
-          Decision now: <span className="font-medium">{dec}</span>
+        {/* Show current decision for visibility */}
+        <div className="text-xs text-white/60 text-center">
+          Decision now: <span className="font-medium text-white">{dec}</span>
           {!unsupported ? null : <span className="ml-2">(unsupported)</span>}
         </div>
 
@@ -129,8 +131,10 @@ export default function PermMic() {
             onClick={chooseAlways}
             disabled={busy || unsupported}
             className={[
-              'w-full rounded-xl py-3 disabled:opacity-50',
-              picked === 'always' ? 'bg-black text-white ring-2 ring-black' : 'bg-black text-white'
+              'w-full rounded-xl py-3 font-semibold disabled:opacity-50 transition',
+              picked === 'always'
+                ? 'bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120]'
+                : 'bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120]'
             ].join(' ')}
           >
             {picked === 'always' && busy ? 'Requesting…' : 'Always allow'}
@@ -140,8 +144,8 @@ export default function PermMic() {
             onClick={chooseSession}
             disabled={busy || unsupported}
             className={[
-              'w-full rounded-xl border py-3 disabled:opacity-50',
-              picked === 'session' ? 'ring-2 ring-black' : ''
+              'w-full rounded-xl border border-white/20 py-3 text-white disabled:opacity-50',
+              picked === 'session' ? 'bg-white/10' : 'bg-white/5'
             ].join(' ')}
           >
             {picked === 'session' && busy ? 'Requesting…' : 'Only this time'}
@@ -151,15 +155,15 @@ export default function PermMic() {
             onClick={chooseNever}
             disabled={busy}
             className={[
-              'w-full rounded-xl border py-3',
-              picked === 'never' ? 'ring-2 ring-black' : ''
+              'w-full rounded-xl border border-white/20 py-3 text-white/80 disabled:opacity-50',
+              picked === 'never' ? 'bg-white/5' : ''
             ].join(' ')}
           >
             Don’t allow
           </button>
         </div>
 
-        <p className="text-xs text-gray-500">You can change this later in Settings.</p>
+        <p className="text-xs text-center text-white/60">You can change this later in Settings.</p>
       </div>
     </div>
   );

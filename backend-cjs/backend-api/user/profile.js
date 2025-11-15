@@ -32,7 +32,8 @@ router.post("/", async (req, res) => {
     }
     catch (e) {
         console.error("POST /profile failed:", e);
-        return res.status(500).json({ ok: false, error: e?.message || "internal error" });
+        const status = typeof e?.status === "number" ? e.status : 500;
+        return res.status(status).json({ ok: false, error: e?.message || "internal error" });
     }
 });
 /* -------------------------------------------------------------------------- */
@@ -122,10 +123,28 @@ async function upsertBasicProfile(uid, input) {
         update.name = input.name.trim();
     }
     if (input.phone?.trim()) {
-        update.phone = input.phone.trim();
+        const nextPhone = input.phone.trim();
+        await ensureUniquePhone(uid, nextPhone);
+        update.phone = nextPhone;
     }
     await db.collection("users").doc(uid).set(update, { merge: true });
     return { ok: true };
+}
+async function ensureUniquePhone(uid, phone) {
+    const db = (0, firestore_1.getFirestore)();
+    const snap = await db
+        .collection("users")
+        .where("phone", "==", phone)
+        .limit(1)
+        .get();
+    if (!snap.empty) {
+        const existingId = snap.docs[0].id;
+        if (existingId !== uid) {
+            const err = new Error("An account with this phone already exists.");
+            err.status = 409;
+            throw err;
+        }
+    }
 }
 function currentWeekId() {
     const now = new Date();

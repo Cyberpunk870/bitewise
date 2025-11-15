@@ -40,11 +40,64 @@ export type Task = {
 /* -------------------------------------------------------------------------- */
 /*                             LocalStorage keys                              */
 /* -------------------------------------------------------------------------- */
-const LS_TASKS = 'bw.tasks.today.v3';
+const LS_TASKS = 'bw.missions.today.v1';
 const LS_TOKENS = 'bw.tokens';
 const LS_DAYKEY = 'bw.tasks.seed.day.v3';
 const LS_CARRY = 'bw.tasks.carryover.v3';
 const LS_LAST_ROTATE = 'bw.tasks.lastRotate.v3';
+const LS_STREAK_CUR = 'bw.missions.streak.current';
+const LS_STREAK_BEST = 'bw.missions.streak.best';
+const LS_STREAK_DAY = 'bw.missions.streak.day';
+const LS_TOTAL_COMPLETED = 'bw.missions.totalCompleted';
+
+type MissionStreak = { current: number; best: number; lastDay: string | null };
+export type MissionStats = { streak: MissionStreak; totalCompleted: number };
+
+function storageGet(key: string): string | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) return raw;
+  } catch {}
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storageSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+    return;
+  } catch {}
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+function getNumber(key: string): number {
+  return Number(storageGet(key) || '0');
+}
+
+function setNumber(key: string, value: number) {
+  storageSet(key, String(value));
+}
+
+export function getMissionStreak(): MissionStreak {
+  const current = getNumber(LS_STREAK_CUR);
+  const best = getNumber(LS_STREAK_BEST);
+  const lastDay = storageGet(LS_STREAK_DAY);
+  return { current, best, lastDay };
+}
+
+export function getMissionStats(): MissionStats {
+  return {
+    streak: getMissionStreak(),
+    totalCompleted: getNumber(LS_TOTAL_COMPLETED),
+  };
+}
 
 /* -------------------------------------------------------------------------- */
 /*                             Token management                               */
@@ -67,11 +120,65 @@ export function addBites(delta: number) {
 /*                              Task persistence                              */
 /* -------------------------------------------------------------------------- */
 export function getTasks(): Task[] {
-  try { return JSON.parse(sessionStorage.getItem(LS_TASKS) || '[]'); } catch { return []; }
+  try { return JSON.parse(storageGet(LS_TASKS) || '[]'); } catch { return []; }
 }
 export function setTasks(list: Task[]) {
-  sessionStorage.setItem(LS_TASKS, JSON.stringify(list));
+  storageSet(LS_TASKS, JSON.stringify(list));
   emit('bw:tasks:changed', list);
+}
+
+function daysBetween(a: Date, b: Date) {
+  const utc1 = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const utc2 = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.floor(Math.abs(utc2 - utc1) / (24 * 60 * 60 * 1000));
+}
+
+function pushMissionStats(streak?: MissionStreak) {
+  const payload: MissionStats = {
+    streak: streak ?? getMissionStreak(),
+    totalCompleted: getNumber(LS_TOTAL_COMPLETED),
+  };
+  emit('bw:missions:stats', payload);
+  emit('bw:streak:update', payload.streak);
+}
+
+function registerMissionCompletion() {
+  const today = new Date();
+  const todayKey = today.toDateString();
+  const lastDay = storageGet(LS_STREAK_DAY);
+  let current = getNumber(LS_STREAK_CUR);
+  let best = getNumber(LS_STREAK_BEST);
+  let celebrateStreak = false;
+
+  if (lastDay === todayKey) {
+    // already counted today
+  } else if (lastDay) {
+    const prev = new Date(lastDay);
+    const delta = daysBetween(prev, today);
+    current = delta === 1 ? current + 1 : 1;
+    celebrateStreak = true;
+  } else {
+    current = 1;
+    celebrateStreak = true;
+  }
+
+  if (celebrateStreak || !lastDay) {
+    setNumber(LS_STREAK_CUR, current);
+    storageSet(LS_STREAK_DAY, todayKey);
+  }
+
+  if (current > best) {
+    best = current;
+    setNumber(LS_STREAK_BEST, best);
+  }
+
+  const total = getNumber(LS_TOTAL_COMPLETED) + 1;
+  setNumber(LS_TOTAL_COMPLETED, total);
+
+  const streak: MissionStreak = { current, best, lastDay: todayKey };
+  pushMissionStats(streak);
+
+  return { streak, celebrate: celebrateStreak };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -145,6 +252,7 @@ function seedToday(): Task[] {
   setTasks(fresh);
   localStorage.setItem(LS_DAYKEY, todayKey);
   localStorage.setItem(LS_LAST_ROTATE, String(Date.now()));
+  pushMissionStats();
   return fresh;
 }
 
@@ -195,8 +303,18 @@ Promise<void> {
   if (idx < 0) return;
   const t = list[idx];
   if (!t.ready || t.done) return;
-  const updated = list.filter(x => x.id !== id);
+  const updated = list.map((item) =>
+    item.id === id ? { ...item, done: true, ready: false } : item
+  );
   setTasks(updated);
+  const remaining = updated.filter((mission) => !mission.done);
+  const streakResult = registerMissionCompletion();
+  if (streakResult.celebrate) {
+    emit('bw:confetti', { reason: 'missions-streak', streak: streakResult.streak.current });
+  }
+  if (remaining.length === 0) {
+    emit('bw:confetti', { reason: 'missions-complete' });
+  }
 
   addBites(t.reward);
   addNotice({ kind:'milestone', title:'Task complete ✅', body:`${t.title} (+${t.reward} Bites)` });

@@ -4,6 +4,18 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ensureRecaptcha, sendOtp, clearRecaptcha } from '../../lib/firebase';
 import { useAuth } from '../../store/auth';
 
+const PUBLIC_BASE = import.meta.env.DEV ? 'http://localhost:3000/public' : '/public';
+
+async function isPhoneTaken(phone: string) {
+  const url = `${PUBLIC_BASE}/check-phone?phone=${encodeURIComponent(phone)}`;
+  const res = await fetch(url, { credentials: 'omit' });
+  if (!res.ok) {
+    throw new Error('Unable to verify phone. Please try again.');
+  }
+  const data = await res.json();
+  return Boolean(data?.exists);
+}
+
 export default function Phone() {
   const nav = useNavigate();
   const [params] = useSearchParams();
@@ -11,6 +23,7 @@ export default function Phone() {
   const { phone, setPhone, setConfirmation } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showExists, setShowExists] = useState(false);
 
   const e164 = useMemo(() => {
     const raw = (phone || '').replace(/[^\d+]/g, '');
@@ -37,6 +50,14 @@ export default function Phone() {
 
     setSubmitting(true);
     try {
+      if (mode === 'signup') {
+        const taken = await isPhoneTaken(e164);
+        if (taken) {
+          setErr('An account already exists with this phone number. Please log in.');
+          setShowExists(true);
+          return;
+        }
+      }
       // Always proceed to OTP; existence is determined & upserted after verification on backend
       ensureRecaptcha();                 // create/reuse invisible widget (idempotent)
       const result = await sendOtp(e164); // uses the same singleton verifier
@@ -85,6 +106,35 @@ export default function Phone() {
         {/* Host for invisible reCAPTCHA (will be created if missing) */}
         <div id="recaptcha-container" />
       </form>
+
+      {showExists && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
+          <div className="glass-card w-full max-w-sm p-6 space-y-4 text-white">
+            <h2 className="text-xl font-semibold">Account already exists</h2>
+            <p className="text-sm text-white/70">
+              This phone number is already linked to a BiteWise account. Please switch to the login
+              option or use a different number.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                className="flex-1 rounded-xl bg-white text-black py-2 font-semibold"
+                onClick={() => {
+                  setShowExists(false);
+                  nav('/onboarding/auth/phone?mode=login', { replace: true });
+                }}
+              >
+                Go to Login
+              </button>
+              <button
+                className="flex-1 rounded-xl border border-white/30 py-2 text-white/80"
+                onClick={() => setShowExists(false)}
+              >
+                Use another number
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

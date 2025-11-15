@@ -92,14 +92,16 @@ export default function PermLocation() {
 
   return (
     <div className="min-h-dvh grid place-items-center px-4">
-      <div className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl p-6 space-y-5 shadow-lg animate-fade-up">
-        <h1 className="text-2xl font-bold">Allow Location</h1>
-        <p className="text-sm text-gray-600">
-          We use your location to find nearby restaurants and accurate delivery estimates.
-        </p>
+      <div className="glass-card w-full max-w-md p-6 space-y-5 text-white animate-fade-up">
+        <div className="space-y-2 text-center">
+          <h1 className="text-2xl font-bold">Allow Location</h1>
+          <p className="text-sm text-white/70">
+            We use your location to find nearby restaurants and accurate delivery estimates.
+          </p>
+        </div>
 
         {unsupported && (
-          <div className="rounded-xl border p-3 text-sm">
+          <div className="rounded-xl border border-white/15 bg-white/5 p-3 text-sm text-white/80">
             Your browser doesn’t support geolocation. You can continue without it.
           </div>
         )}
@@ -108,27 +110,27 @@ export default function PermLocation() {
           <button
             onClick={chooseAlways}
             disabled={busy || unsupported}
-            className="w-full rounded-xl bg-black text-white py-3 disabled:opacity-50"
+            className="w-full rounded-xl bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] font-semibold py-3 disabled:opacity-60"
           >
             Always allow
           </button>
           <button
             onClick={chooseSession}
             disabled={busy || unsupported}
-            className="w-full rounded-xl border py-3 disabled:opacity-50"
+            className="w-full rounded-xl border border-white/20 bg-white/5 text-white py-3 disabled:opacity-50"
           >
             Only this time
           </button>
           <button
             onClick={chooseNever}
             disabled={busy}
-            className="w-full rounded-xl border py-3"
+            className="w-full rounded-xl border border-white/20 py-3 text-white/80 disabled:opacity-40"
           >
             Don’t allow
           </button>
         </div>
 
-        <p className="text-xs text-gray-500">You can change this later in Settings.</p>
+        <p className="text-xs text-center text-white/60">You can change this later in Settings.</p>
       </div>
     </div>
   );

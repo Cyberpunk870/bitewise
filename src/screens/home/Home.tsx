@@ -120,20 +120,24 @@ const DishCard = memo(function DishCard({
           alt={d.name}
         />
         {selected && (
-          <div className="absolute inset-0 bg-black/30 flex items-end justify-center p-3 gap-2">
+          <div className="absolute inset-0 bg-[rgba(4,9,20,0.88)] backdrop-blur-sm flex items-end justify-center p-3 gap-2">
             {qty > 0 ? (
               <div
-                className="grid grid-cols-[36px,40px,36px] items-center gap-2 bg-white rounded-full px-2 py-2"
+                className="grid grid-cols-[36px,52px,36px] items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white px-2 py-2 shadow-lg shadow-black/40"
                 onClick={(e) => e.stopPropagation()}
               >
-                <button className="px-3 text-xl leading-none" onClick={onDec}>-</button>
-                <div className="text-center select-none">{qty}</div>
-                <button className="px-3 text-xl leading-none" onClick={onInc}>+</button>
+                <button className="px-3 text-xl leading-none text-white hover:text-rose-200" onClick={onDec}>
+                  -
+                </button>
+                <div className="text-center select-none font-semibold">{qty}</div>
+                <button className="px-3 text-xl leading-none text-white hover:text-lime-200" onClick={onInc}>
+                  +
+                </button>
               </div>
             ) : (
               <button
                 type="button"
-                className="text-sm w-full rounded-xl border px-3 py-2 bg-white"
+                className="text-sm w-full rounded-xl px-4 py-2 font-semibold bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] shadow-lg shadow-rose-500/30"
                 onClick={onAddFirst}
               >
                 Add to cart

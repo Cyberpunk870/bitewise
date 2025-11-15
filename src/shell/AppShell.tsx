@@ -4,6 +4,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
 import ToastHost from '../components/ToastHost';
 import RewardHost from '../components/RewardHost';
+import ConfettiBurst from '../components/ConfettiBurst';
 import { clearSessionPerms, decidePerm } from '../lib/permPrefs';
 import { startTaskEngine } from '../lib/TaskEngine';
 import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
@@ -273,6 +274,7 @@ export default function AppShell() {
       <main className="app-shell__content">
         <Outlet />
       </main>
+      <ConfettiBurst />
       <RewardHost />
       <ToastHost />
       <ReturnBanner />
