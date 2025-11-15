@@ -1,39 +1,44 @@
 // src/router.tsx
+import React, { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom';
 import AppShell from './shell/AppShell';
 
-/* Onboarding screens */
-import Welcome            from './screens/onboarding/Welcome';
-import Name               from './screens/onboarding/Name';
-import Dob                from './screens/onboarding/Dob';
-import AddressPick        from './screens/onboarding/AddressPick';
-import AddressLabel       from './screens/onboarding/AddressLabel';
-import Phone              from './screens/onboarding/Phone';
-import Otp                from './screens/onboarding/Otp';
-import PermLocation       from './screens/onboarding/PermLocation';
-import PermNotifications  from './screens/onboarding/PermNotifications';
-import PermMic            from './screens/onboarding/PermMic';
-import SetPasskey         from './screens/onboarding/SetPasskey';
-import Finish             from './screens/onboarding/Finish';
+const Welcome = lazy(() => import('./screens/onboarding/Welcome'));
+const Name = lazy(() => import('./screens/onboarding/Name'));
+const Dob = lazy(() => import('./screens/onboarding/Dob'));
+const AddressPick = lazy(() => import('./screens/onboarding/AddressPick'));
+const AddressLabel = lazy(() => import('./screens/onboarding/AddressLabel'));
+const Phone = lazy(() => import('./screens/onboarding/Phone'));
+const Otp = lazy(() => import('./screens/onboarding/Otp'));
+const PermLocation = lazy(() => import('./screens/onboarding/PermLocation'));
+const PermNotifications = lazy(() => import('./screens/onboarding/PermNotifications'));
+const PermMic = lazy(() => import('./screens/onboarding/PermMic'));
+const SetPasskey = lazy(() => import('./screens/onboarding/SetPasskey'));
+const Finish = lazy(() => import('./screens/onboarding/Finish'));
 
-/* Auth (returning users) */
-import Unlock             from './screens/auth/Unlock';
-// ❌ We will NOT import PasskeyLogin for runtime use anymore
-// import PasskeyLogin    from './screens/auth/PasskeyLogin';
+const Unlock = lazy(() => import('./screens/auth/Unlock'));
 
-/* App screens */
-import Home               from './screens/home/Home';
-import Compare            from './screens/compare/Compare';
-import Cart               from './screens/cart/Cart';
-import Availability       from './screens/availability/Availability';
+const Home = lazy(() => import('./screens/home/Home'));
+const Compare = lazy(() => import('./screens/compare/Compare'));
+const Cart = lazy(() => import('./screens/cart/Cart'));
+const Availability = lazy(() => import('./screens/availability/Availability'));
 
-/* Real hamburger targets */
-import Inbox              from './screens/notifications/Inbox';
-import Tasks              from './screens/tasks/Tasks';
-import Leaderboard        from './screens/leaderboard/Leaderboard';
-import History            from './screens/orders/History';
-import Settings           from './screens/settings/Settings';
-import Achievements       from './screens/achievements/Achievements';
+const Inbox = lazy(() => import('./screens/notifications/Inbox'));
+const Tasks = lazy(() => import('./screens/tasks/Tasks'));
+const Leaderboard = lazy(() => import('./screens/leaderboard/Leaderboard'));
+const History = lazy(() => import('./screens/orders/History'));
+const Settings = lazy(() => import('./screens/settings/Settings'));
+const Achievements = lazy(() => import('./screens/achievements/Achievements'));
+
+const SUSPENSE_FALLBACK = (
+  <div className="min-h-dvh grid place-items-center text-white/70">
+    Loading…
+  </div>
+);
+
+const withSuspense = (node: React.ReactElement) => (
+  <Suspense fallback={SUSPENSE_FALLBACK}>{node}</Suspense>
+);
 
 /* ---------- Guards ---------- */
 function RequireAuthedOutlet() {
@@ -76,7 +81,7 @@ const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
-      { path: '/', element: <Welcome /> },
+      { path: '/', element: withSuspense(<Welcome />) },
 
       // Handy reset route
       { path: '/reset', element: <Reset /> },
@@ -86,22 +91,22 @@ const router = createBrowserRouter([
         element: <RequireVisitorOutlet />,
         children: [
           { path: '/onboarding',                    element: <Navigate to="/onboarding/auth/phone" replace /> },
-          { path: '/onboarding/name',               element: <Name /> },
-          { path: '/onboarding/dob',                element: <Dob /> },
-          { path: '/onboarding/address/pick',       element: <AddressPick /> },
-          { path: '/onboarding/address/label',      element: <AddressLabel /> },
-          { path: '/onboarding/auth/phone',         element: <Phone /> },
-          { path: '/onboarding/auth/otp',           element: <Otp /> },
-          { path: '/onboarding/perm/location',      element: <PermLocation /> },
-          { path: '/onboarding/perm/notifications', element: <PermNotifications /> },
-          { path: '/onboarding/perm/mic',           element: <PermMic /> },
-          { path: '/onboarding/setpasskey',         element: <SetPasskey /> },
-          { path: '/onboarding/finish',             element: <Finish /> },
+          { path: '/onboarding/name',               element: withSuspense(<Name />) },
+          { path: '/onboarding/dob',                element: withSuspense(<Dob />) },
+          { path: '/onboarding/address/pick',       element: withSuspense(<AddressPick />) },
+          { path: '/onboarding/address/label',      element: withSuspense(<AddressLabel />) },
+          { path: '/onboarding/auth/phone',         element: withSuspense(<Phone />) },
+          { path: '/onboarding/auth/otp',           element: withSuspense(<Otp />) },
+          { path: '/onboarding/perm/location',      element: withSuspense(<PermLocation />) },
+          { path: '/onboarding/perm/notifications', element: withSuspense(<PermNotifications />) },
+          { path: '/onboarding/perm/mic',           element: withSuspense(<PermMic />) },
+          { path: '/onboarding/setpasskey',         element: withSuspense(<SetPasskey />) },
+          { path: '/onboarding/finish',             element: withSuspense(<Finish />) },
         ]
       },
 
       // Returning users
-      { path: '/unlock', element: <Unlock /> },
+      { path: '/unlock', element: withSuspense(<Unlock />) },
 
       // 🔁 DEPRECATED LEGACY ROUTE
       // Instead of rendering PasskeyLogin (which fakes auth by just setting bw.session.phone),
@@ -112,18 +117,18 @@ const router = createBrowserRouter([
       {
         element: <RequireAuthedOutlet />,
         children: [
-          { path: '/home',           element: <Home /> },
-          { path: '/compare/:id',    element: <Compare /> },
-          { path: '/cart',           element: <Cart /> },
-          { path: '/availability',   element: <Availability /> },
+          { path: '/home',           element: withSuspense(<Home />) },
+          { path: '/compare/:id',    element: withSuspense(<Compare />) },
+          { path: '/cart',           element: withSuspense(<Cart />) },
+          { path: '/availability',   element: withSuspense(<Availability />) },
 
           // Hamburger routes (real screens)
-          { path: '/notifications',  element: <Inbox /> },
-          { path: '/tasks',          element: <Tasks /> },
-          { path: '/leaderboard',    element: <Leaderboard /> },
-          { path: '/orders/history', element: <History /> },
-          { path: '/settings',       element: <Settings /> },
-          { path: '/achievements',   element: <Achievements /> },
+          { path: '/notifications',  element: withSuspense(<Inbox />) },
+          { path: '/tasks',          element: withSuspense(<Tasks />) },
+          { path: '/leaderboard',    element: withSuspense(<Leaderboard />) },
+          { path: '/orders/history', element: withSuspense(<History />) },
+          { path: '/settings',       element: withSuspense(<Settings />) },
+          { path: '/achievements',   element: withSuspense(<Achievements />) },
         ],
       },
 
