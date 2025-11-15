@@ -30,22 +30,22 @@ export default function AppShell() {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(async regs => {
-      const hasFM = regs.some(r => r.active?.scriptURL.includes('firebase-messaging-sw.js'));
-      if (!hasFM) {
-        try {
-          const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-          console.log('[sw] firebase-messaging-sw.js registered', reg.scope);
-        } catch (e) {
-          console.warn('[sw] register failed', e);
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(async (regs) => {
+        const hasPrimary = regs.some((r) => r.active?.scriptURL.includes('pwa-sw.js'));
+        if (!hasPrimary) {
+          try {
+            const reg = await navigator.serviceWorker.register('/pwa-sw.js');
+            console.log('[sw] pwa-sw.js registered', reg.scope);
+          } catch (e) {
+            console.warn('[sw] register failed', e);
+          }
+        } else {
+          console.log('[sw] already registered');
         }
-      } else {
-        console.log('[sw] already registered');
-      }
-    });
-  }
-}, []);
+      });
+    }
+  }, []);
 
   const hasActiveSession = () => {
     try { return !!sessionStorage.getItem('bw.session.phone'); } catch { return false; }
