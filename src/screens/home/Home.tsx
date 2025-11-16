@@ -549,14 +549,15 @@ export default function Home() {
     </main>
   );
 }
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'image';
-    link.href = HERO_PLACEHOLDER;
-    (link as any).fetchPriority = 'high';
-    document.head.appendChild(link);
-    return () => {
-      document.head.removeChild(link);
-    };
-  }, []);
+useEffect(() => {
+  if (typeof document === 'undefined') return;
+  const link = document.createElement('link');
+  link.rel = 'preload';
+  link.as = 'image';
+  link.href = HERO_PLACEHOLDER;
+  (link as any).fetchPriority = 'high';
+  document.head.appendChild(link);
+  return () => {
+    document.head.removeChild(link);
+  };
+}, []);

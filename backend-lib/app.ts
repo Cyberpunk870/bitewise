@@ -32,6 +32,7 @@ import leaderboard from "./backend-api/leaderboard";
 import achievements from "./backend-api/achievements";
 import tasks from "./backend-api/tasks";
 import ingest from "./backend-api/ingest";
+import analytics from "./backend-api/analytics";
 import { verifyAuth } from "./middleware/verifyAuth";
 
 console.log("[server/app] module loading…");
@@ -250,6 +251,7 @@ app.use("/api/leaderboard", leaderboard);
 app.use("/api/achievements", achievements);
 app.use("/api/tasks", tasks);
 app.use("/api/ingest", ingest);
+app.use("/api/analytics", analytics);
 
 /* -------------------- Push Registration -------------------- */
 app.post("/api/push/register", async (req, res) => {

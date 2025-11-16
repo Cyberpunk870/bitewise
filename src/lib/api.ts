@@ -83,6 +83,13 @@ export function addCoins(amount: number, reason: string) {
 }
 
 // ------------------------------------------------------------------
+// 📊 Analytics
+// ------------------------------------------------------------------
+export function getAnalyticsSummary(days = 7) {
+  return apiGet(`/analytics/summary?days=${days}`);
+}
+
+// ------------------------------------------------------------------
 // 🥇 Leaderboard / Achievements / Tasks
 // ------------------------------------------------------------------
 export function getLeaderboard() {

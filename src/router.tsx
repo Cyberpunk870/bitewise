@@ -29,6 +29,7 @@ const Leaderboard = lazy(() => import('./screens/leaderboard/Leaderboard'));
 const History = lazy(() => import('./screens/orders/History'));
 const Settings = lazy(() => import('./screens/settings/Settings'));
 const Achievements = lazy(() => import('./screens/achievements/Achievements'));
+const AdminAnalytics = lazy(() => import('./screens/admin/Analytics'));
 
 const SUSPENSE_FALLBACK = (
   <div className="min-h-dvh grid place-items-center text-white/70">
@@ -129,6 +130,7 @@ const router = createBrowserRouter([
           { path: '/orders/history', element: withSuspense(<History />) },
           { path: '/settings',       element: withSuspense(<Settings />) },
           { path: '/achievements',   element: withSuspense(<Achievements />) },
+          { path: '/admin/analytics', element: withSuspense(<AdminAnalytics />) },
         ],
       },
 
