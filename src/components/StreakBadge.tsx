@@ -1,6 +1,7 @@
 // src/components/StreakBadge.tsx
 import React from 'react';
 import { getMissionStats, type MissionStats } from '../lib/tasks';
+import { on } from '../lib/events';
 
 type Props = {
   value: number;
