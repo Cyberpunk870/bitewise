@@ -1,5 +1,5 @@
 // src/shell/AppShell.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { Suspense, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getAuth, signOut } from 'firebase/auth';
 import ToastHost from '../components/ToastHost';
@@ -11,8 +11,6 @@ import { startTaskEngine } from '../lib/TaskEngine';
 import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
 import { emit, on } from '../lib/events';
 import { syncTokensFromCloud } from '../lib/tokens';
-import ReturnBanner from '../components/ReturnBanner';
-import InstallBanner from '../components/InstallBanner';
 // 🔄 Cloud profile
 import { hydrateActiveFromCloud, pushActiveToCloud } from '../lib/cloudProfile';
 // Passive live pings (no prompts)
@@ -21,6 +19,8 @@ import { startLiveLocationWatcher } from '../lib/location';
 // ✅ NEW: hook up push init when auth/permission are ready
 import { initOrRefreshPushOnAuth } from '../lib/notify';
 import { initReturnListener } from '../lib/orderReturn';
+const ReturnBanner = React.lazy(() => import('../components/ReturnBanner'));
+const InstallBanner = React.lazy(() => import('../components/InstallBanner'));
 
 const IDLE_MS = 60 * 1000;
 const FEED_KIND = import.meta.env.VITE_FEED || 'dummy';
@@ -279,8 +279,12 @@ export default function AppShell() {
         <ConfettiBurst />
         <RewardHost />
         <ToastHost />
-        <ReturnBanner />
-        <InstallBanner />
+        <Suspense fallback={null}>
+          <ReturnBanner />
+        </Suspense>
+        <Suspense fallback={null}>
+          <InstallBanner />
+        </Suspense>
       </div>
     </MissionStatsProvider>
   );

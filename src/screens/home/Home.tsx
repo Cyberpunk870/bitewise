@@ -83,7 +83,14 @@ type DishVM = { id: string; name: string; cuisine?: string; rating?: number; ima
 
 /* ----- memoised card ----- */
 const DishCard = memo(function DishCard({
-  d, qty, onInc, onDec, onAddFirst, selected, onSelect,
+  d,
+  qty,
+  onInc,
+  onDec,
+  onAddFirst,
+  selected,
+  onSelect,
+  priority = false,
 }: {
   d: DishVM;
   qty: number;
@@ -92,6 +99,7 @@ const DishCard = memo(function DishCard({
   onAddFirst: () => void;
   selected: boolean;
   onSelect: () => void;
+  priority?: boolean;
 }) {
   return (
     <div
@@ -109,7 +117,8 @@ const DishCard = memo(function DishCard({
         <img
           src={d.image || placeholderDishUrl()}
           className="absolute inset-0 h-full w-full object-cover object-center"
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchpriority={priority ? 'high' : 'auto'}
           decoding="async"
           sizes="(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw"
           onError={(e) => {
@@ -453,7 +462,7 @@ export default function Home() {
 
         {/* Dish grid */}
         <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleDishes.map((d) => {
+          {visibleDishes.map((d, idx) => {
             const id = String(d.id);
             const qty = qtyOf(id);
             const selected = selectedId === id;
@@ -463,6 +472,7 @@ export default function Home() {
                 d={d}
                 qty={qty}
                 selected={selected}
+                priority={idx < 3}
                 onSelect={() => onDishSelect(id)}
                 onInc={() => addAndTrack({ id, name: d.name })}
                 onDec={() => dec(id)}
