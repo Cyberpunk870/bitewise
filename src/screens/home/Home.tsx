@@ -558,6 +558,8 @@ useEffect(() => {
   (link as any).fetchPriority = 'high';
   document.head.appendChild(link);
   return () => {
-    document.head.removeChild(link);
+    if (link.parentNode) {
+      link.parentNode.removeChild(link);
+    }
   };
 }, []);
