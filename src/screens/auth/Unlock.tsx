@@ -8,7 +8,7 @@ import { emit } from '../../lib/events';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { hydrateActiveFromCloud } from '../../lib/cloudProfile';
 import { initOrRefreshPushOnAuth } from '../../lib/notify';
-import { track } from '../../lib/analytics';
+import { track } from '../../lib/track';
 
 export default function Unlock() {
   const nav = useNavigate();

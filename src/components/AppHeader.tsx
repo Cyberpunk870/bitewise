@@ -9,7 +9,7 @@ import CoinIcon from './CoinIcon';
 import { emit } from '../lib/events';
 import { manualLogout } from '../lib/session'; // ✅ NEW: single source of truth
 import BitewiseLogo from './BitewiseLogo';
-import { searchDishes } from '../lib/fuzzyDish';
+import type { FuzzyDishMatch } from '../lib/fuzzyDish';
 import type { BotMessage as PanelMessage } from './YummiBotPanel';
 
 /* icons */
@@ -70,6 +70,19 @@ const BotShell = React.lazy(() => import('./YummiBotPanel'));
 export default function AppHeader() {
   const nav = useNavigate();
   const { count } = useCart();
+  const fuzzyRef = useRef<((query: string, limit?: number) => FuzzyDishMatch[]) | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    import('../lib/fuzzyDish')
+      .then((mod) => {
+        if (mounted) fuzzyRef.current = mod.searchDishes;
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   /* profile */
   const [profile, setProfile] = useState(() => getActiveProfile());
@@ -324,7 +337,8 @@ export default function AppHeader() {
     setBotTyping(true);
 
     setTimeout(() => {
-      const matches = searchDishes(trimmed, 3);
+      const fn = fuzzyRef.current;
+      const matches = fn ? fn(trimmed, 3) : [];
       if (matches.length) {
         pushBotMessage({
           id: `bot-${Date.now()}`,

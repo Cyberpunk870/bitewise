@@ -8,7 +8,7 @@ import {
   markCompletion as apiMarkCompletion,
 } from './api';
 import { setTokens } from './tokens'; // <- existing setter from tokens.ts
-import { track } from './analytics';
+import { track } from './track';
 
 export type OutboundCtx = {
   id?: string;               // backend id from /api/orders/outbound

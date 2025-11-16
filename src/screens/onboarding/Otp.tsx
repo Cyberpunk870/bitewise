@@ -6,7 +6,7 @@ import { useAuth } from '../../store/auth';
 import { upsertUser, setActivePhone } from '../../lib/profileStore';
 import { emit } from '../../lib/events';
 import { hydrateActiveFromCloud, pushActiveToCloud } from '../../lib/cloudProfile';
-import { track } from '../../lib/analytics';
+import { track } from '../../lib/track';
 
 export default function Otp() {
   const nav = useNavigate();

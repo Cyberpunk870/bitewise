@@ -3,7 +3,7 @@
 import { getMessaging, getToken, onMessage, isSupported } from "firebase/messaging";
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { track } from "./analytics";
+import { track } from "./track";
 
 /* ----------------------------- Constants ----------------------------- */
 const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY;

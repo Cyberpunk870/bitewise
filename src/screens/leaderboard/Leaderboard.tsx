@@ -200,98 +200,81 @@ export default function Leaderboard() {
     }
 
     if (!rows.length) {
-      return (
-        <tr className="border-t">
-          <td
-            colSpan={4}
-            className="py-6 text-center text-sm text-gray-500"
-          >
-            No savers yet. Be the first this week 👑
-          </td>
-        </tr>
-      );
+      return <div className="py-6 text-center text-sm text-white/70">No savers yet. Be the first this week 👑</div>;
     }
 
     return rows.map((r, i) => (
-      <tr
+      <div
         key={r.uid + "-" + i}
-        className={`border-t ${r.isYou ? "bg-yellow-50" : ""}`}
+        className={[
+          "flex items-center justify-between rounded-2xl border border-white/10 px-3 py-3",
+          r.isYou ? "bg-white/15 shadow-lg shadow-indigo-500/20" : "bg-white/5",
+        ].join(" ")}
       >
-        <td className="py-2 px-3">
-          {i < 3 ? <Medal rank={i + 1} /> : i + 1}
-        </td>
-        <td className="py-2 px-3">
-          {r.name}
-          {r.isYou ? " (you)" : ""}
-        </td>
-        <td className="py-2 px-3">
-          {r.coins.toLocaleString("en-IN")}
-        </td>
-        <td className="py-2 px-3">
-          ₹{r.savingsThisFrame.toFixed(0)}
-        </td>
-      </tr>
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-white/10 grid place-items-center text-sm font-semibold">
+            {i + 1}
+          </div>
+          <div>
+            <div className="font-semibold text-white flex items-center gap-2">
+              {r.name}
+              {r.isYou && (
+                <span className="text-[10px] uppercase tracking-[0.2em] text-white/70">
+                  YOU
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-white/60">₹{r.savingsThisFrame.toFixed(0)} saved</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-semibold text-amber-200">{r.coins.toLocaleString("en-IN")} Bites</div>
+          <div className="text-xs text-white/60 flex items-center justify-end gap-2">
+            <Medal rank={i + 1} /> {frameLabel(frame)}
+          </div>
+        </div>
+      </div>
     ));
   }, [rows, loading, frame, errorMsg]);
 
   return (
-    <main className="min-h-screen">
-      <div className="max-w-3xl mx-auto px-4 py-6">
-        {/* header */}
-        <header className="flex items-center justify-between mb-4">
+    <main className="min-h-screen px-4 py-6 text-white">
+      <div className="max-w-4xl mx-auto space-y-5">
+        <header className="flex items-center justify-between">
           <button
-            className="px-3 py-1.5 text-sm rounded-full border bg-white/80"
+            className="px-3 py-1.5 text-sm rounded-full border border-white/20 bg-white/10 hover:bg-white/15 transition"
             onClick={() => nav(-1)}
           >
             ← Back
           </button>
-          <h1 className="text-lg font-semibold text-white drop-shadow">
-            Leaderboard
-          </h1>
-          <div className="w-16" />
+          <h1 className="text-lg font-semibold">Leaderboard</h1>
+          <div className="text-sm text-white/70">
+            Your rank: <b>{myRank !== null ? `#${myRank}` : "—"}</b>
+          </div>
         </header>
 
-        {/* timeframe selector + rank pill */}
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          {(["week", "month", "all"] as Frame[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFrame(f)}
-              className={`px-3 py-1.5 rounded-full text-sm border ${
-                frame === f
-                  ? "bg-black text-white border-black"
-                  : "bg-white/80"
-              }`}
-            >
-              {frameLabel(f)}
-            </button>
-          ))}
-
-          <div className="ml-auto text-white/90 text-sm">
-            Your rank:{" "}
-            <b>{myRank !== null ? `#${myRank}` : "—"}</b>
+        <div className="glass-card p-5 border border-white/10">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            {(["week", "month", "all"] as Frame[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFrame(f)}
+                className={[
+                  "px-3 py-1.5 rounded-full text-sm border transition",
+                  frame === f
+                    ? "bg-white text-black border-white"
+                    : "bg-white/5 text-white/70 border-white/10",
+                ].join(" ")}
+              >
+                {frameLabel(f)}
+              </button>
+            ))}
           </div>
+          <div className="space-y-3">{tableBody}</div>
+          <p className="text-[11px] text-white/60 mt-4">
+            Savings = money you kept in your pocket by ordering on the cheaper platform.
+          </p>
         </div>
-
-        {/* table */}
-        <div className="rounded-xl overflow-hidden bg-white shadow">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-black/5 text-left">
-                <th className="py-2 px-3">Rank</th>
-                <th className="py-2 px-3">User</th>
-                <th className="py-2 px-3">Tokens</th>
-                <th className="py-2 px-3">Savings (₹)</th>
-              </tr>
-            </thead>
-            <tbody>{tableBody}</tbody>
-          </table>
-        </div>
-
-        <p className="text-xs text-white/90 mt-3">
-          Savings = money you kept in your pocket by ordering on
-          the cheaper platform.
-        </p>
       </div>
     </main>
   );
