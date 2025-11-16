@@ -19,7 +19,6 @@ import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressB
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
-const HERO_PLACEHOLDER = placeholderDishUrl();
 
 /** --- NEW: prompt suppression (prevents loop after “Update address”) --- */
 const SUPPRESS_KEY = 'bw.locationPrompt.suppressUntil';
@@ -119,7 +118,7 @@ const DishCard = memo(function DishCard({
           src={d.image || placeholderDishUrl()}
           className="absolute inset-0 h-full w-full object-cover object-center"
           loading={priority ? 'eager' : 'lazy'}
-          fetchpriority={priority ? 'high' : 'auto'}
+          fetchPriority={priority ? 'high' : 'auto'}
           decoding="async"
           sizes="(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw"
           onError={(e) => {
@@ -549,17 +548,3 @@ export default function Home() {
     </main>
   );
 }
-useEffect(() => {
-  if (typeof document === 'undefined') return;
-  const link = document.createElement('link');
-  link.rel = 'preload';
-  link.as = 'image';
-  link.href = HERO_PLACEHOLDER;
-  (link as any).fetchPriority = 'high';
-  document.head.appendChild(link);
-  return () => {
-    if (link.parentNode) {
-      link.parentNode.removeChild(link);
-    }
-  };
-}, []);
