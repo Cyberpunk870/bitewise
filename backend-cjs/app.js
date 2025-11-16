@@ -26,6 +26,7 @@ const leaderboard_1 = __importDefault(require("./backend-api/leaderboard"));
 const achievements_1 = __importDefault(require("./backend-api/achievements"));
 const tasks_1 = __importDefault(require("./backend-api/tasks"));
 const ingest_1 = __importDefault(require("./backend-api/ingest"));
+const analytics_1 = __importDefault(require("./backend-api/analytics"));
 const verifyAuth_1 = require("./middleware/verifyAuth");
 console.log("[server/app] module loading…");
 /* -------------------- Firebase credential loader -------------------- */
@@ -227,6 +228,7 @@ app.use("/api/leaderboard", leaderboard_1.default);
 app.use("/api/achievements", achievements_1.default);
 app.use("/api/tasks", tasks_1.default);
 app.use("/api/ingest", ingest_1.default);
+app.use("/api/analytics", analytics_1.default);
 /* -------------------- Push Registration -------------------- */
 app.post("/api/push/register", async (req, res) => {
     try {
