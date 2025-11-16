@@ -28,27 +28,29 @@ export default function ReturnBanner() {
   if (!visible) return null;
 
   return (
-    <div className="fixed left-1/2 -translate-x-1/2 bottom-3 z-40">
-      <div className="flex items-center gap-2 rounded-full border bg-white/95 backdrop-blur px-3 py-2 shadow-lg">
-        <span className="text-sm">{label}</span>
-        <button
-          className="text-sm rounded-full bg-black text-white px-3 py-1"
-          onClick={async () => {
-            try { await confirmOrderPlaced(); } catch {}
-            setVisible(false);
-          }}
-        >
-          I placed it
-        </button>
-        <button
-          className="text-sm rounded-full border px-3 py-1"
-          onClick={() => {
-            try { clearPendingReturn(); } catch {}
-            setVisible(false);
-          }}
-        >
-          Not yet
-        </button>
+    <div className="fixed left-1/2 -translate-x-1/2 bottom-3 z-40 px-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl px-4 py-2 text-white shadow-xl shadow-black/30">
+        <span className="text-sm font-medium">{label}</span>
+        <div className="flex items-center gap-2">
+          <button
+            className="text-sm rounded-full bg-white text-black px-3 py-1 font-semibold"
+            onClick={async () => {
+              try { await confirmOrderPlaced(); } catch {}
+              setVisible(false);
+            }}
+          >
+            I placed it
+          </button>
+          <button
+            className="text-sm rounded-full border border-white/30 px-3 py-1 text-white/80"
+            onClick={() => {
+              try { clearPendingReturn(); } catch {}
+              setVisible(false);
+            }}
+          >
+            Not yet
+          </button>
+        </div>
       </div>
     </div>
   );

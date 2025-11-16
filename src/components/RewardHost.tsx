@@ -44,9 +44,9 @@ export default function RewardHost() {
       {/* Your existing reward popup (unchanged behavior) */}
       {open && reward && (
         <div className="fixed inset-0 z-[100] grid place-items-center pointer-events-none">
-          <div className="pointer-events-auto rounded-2xl bg-white/95 border shadow-xl p-5 w-[320px] text-center animate-[pop_200ms_ease]">
-            <div className="text-sm opacity-70">Bits/Bites updated</div>
-            <div className="text-3xl font-bold my-2">+{reward.amount}</div>
+          <div className="pointer-events-auto rounded-2xl border border-white/15 bg-white/10 backdrop-blur-xl text-white shadow-2xl p-5 w-[320px] text-center animate-[pop_200ms_ease]">
+            <div className="text-sm text-white/70">Bits/Bites updated</div>
+            <div className="text-3xl font-bold my-2 text-amber-200">+{reward.amount}</div>
             <div className="text-sm">
               Balance: <b>{anim.val}</b>
             </div>

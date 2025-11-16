@@ -19,6 +19,7 @@ import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressB
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
+const HERO_PLACEHOLDER = placeholderDishUrl();
 
 /** --- NEW: prompt suppression (prevents loop after “Update address”) --- */
 const SUPPRESS_KEY = 'bw.locationPrompt.suppressUntil';
@@ -104,8 +105,8 @@ const DishCard = memo(function DishCard({
   return (
     <div
       className={[
-        'group relative rounded-2xl bg-white/90 shadow border p-3 transition',
-        selected ? 'ring-2 ring-black' : '',
+        'group relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-white shadow-lg shadow-black/30 p-3 transition',
+        selected ? 'ring-2 ring-white/70' : '',
       ].join(' ')}
       role="button"
       tabIndex={0}
@@ -155,12 +156,12 @@ const DishCard = memo(function DishCard({
           </div>
         )}
       </div>
-      <p className="font-medium">{d.name}</p>
-      {d.cuisine ? <p className="text-sm opacity-70">{d.cuisine}</p> : null}
+      <p className="font-semibold text-white">{d.name}</p>
+      {d.cuisine ? <p className="text-sm text-white/70">{d.cuisine}</p> : null}
       {typeof d.rating === 'number' && (
-        <p className="text-sm mt-1 flex items-center gap-2">
-          <span className="text-yellow-500"><Stars value={d.rating} /></span>
-          <span className="opacity-70">{d.rating.toFixed(1)}</span>
+        <p className="text-sm mt-1 flex items-center gap-2 text-white/80">
+          <span className="text-yellow-300"><Stars value={d.rating} /></span>
+          <span>{d.rating.toFixed(1)}</span>
         </p>
       )}
     </div>
@@ -548,3 +549,14 @@ export default function Home() {
     </main>
   );
 }
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = HERO_PLACEHOLDER;
+    (link as any).fetchPriority = 'high';
+    document.head.appendChild(link);
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, []);
