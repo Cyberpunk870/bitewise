@@ -9,14 +9,10 @@ import { MissionStatsProvider } from '../components/StreakBadge';
 import { clearSessionPerms, decidePerm } from '../lib/permPrefs';
 import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
 import { emit, on } from '../lib/events';
-import { syncTokensFromCloud } from '../lib/tokens';
-// 🔄 Cloud profile
-import { hydrateActiveFromCloud, pushActiveToCloud } from '../lib/cloudProfile';
-// Passive live pings (no prompts)
-
-// ✅ NEW: hook up push init when auth/permission are ready
-import { initOrRefreshPushOnAuth } from '../lib/notify';
-import { initReturnListener } from '../lib/orderReturn';
+const lazyCloud = () => import('../lib/cloudProfile');
+const lazyTokens = () => import('../lib/tokens');
+const lazyNotify = () => import('../lib/notify');
+const lazyReturn = () => import('../lib/orderReturn');
 const ReturnBanner = React.lazy(() => import('../components/ReturnBanner'));
 const InstallBanner = React.lazy(() => import('../components/InstallBanner'));
 
@@ -74,7 +70,10 @@ export default function AppShell() {
         if (!fromUnlock || inOnboarding) return;
 
         // ✅ ensure push is “registered” locally when we successfully unlock
-        try { await initOrRefreshPushOnAuth(getActivePhone() || undefined); } catch {}
+        try {
+          const notify = await lazyNotify();
+          await notify.initOrRefreshPushOnAuth(getActivePhone() || undefined);
+        } catch {}
 
         const last = sessionStorage.getItem('bw.lastRoute') || getLastRoute() || '/home';
         setTimeout(() => nav(last, { replace: true }), 0);
@@ -92,8 +91,9 @@ export default function AppShell() {
     try {
       const authed = !!getAuth().currentUser;
       if (authed && hasActiveSession() && getActivePhone()) {
-        await hydrateActiveFromCloud();
-        await pushActiveToCloud();
+        const cloud = await lazyCloud();
+        await cloud.hydrateActiveFromCloud();
+        await cloud.pushActiveToCloud();
         await syncTokensFromCloud();
       }
     } catch {}
@@ -108,7 +108,8 @@ export default function AppShell() {
     const onPermChanged = async () => {
       try {
         if (decidePerm('notifications') === 'allow' && hasActiveSession()) {
-          await initOrRefreshPushOnAuth(getActivePhone() || undefined);
+          const notify = await lazyNotify();
+          await notify.initOrRefreshPushOnAuth(getActivePhone() || undefined);
         }
       } catch {}
     };
@@ -121,9 +122,46 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
-    const stop = initReturnListener();
-    return () => stop && stop();
-    
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    let idleHandle: number | null = null;
+
+    const boot = async () => {
+      try {
+        const mod = await lazyReturn();
+        if (cancelled) return;
+        stop = mod.initReturnListener();
+      } catch (err) {
+        console.error('Return listener failed', err);
+      }
+    };
+
+    if ('requestIdleCallback' in window) {
+      idleHandle = (window as any).requestIdleCallback(
+        () => {
+          idleHandle = null;
+          boot();
+        },
+        { timeout: 2000 }
+      );
+    } else {
+      idleHandle = window.setTimeout(() => {
+        idleHandle = null;
+        boot();
+      }, 1200);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleHandle != null) {
+        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+          (window as any).cancelIdleCallback(idleHandle);
+        } else {
+          window.clearTimeout(idleHandle);
+        }
+      }
+      stop?.();
+    };
   }, []);
 
   /* Cloud hydrate/push */

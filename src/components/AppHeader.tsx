@@ -484,184 +484,22 @@ export default function AppHeader() {
           </button>
         </div>
 
-        {/* Right: coin pill + cart + menu */}
-        <div className="justify-self-end flex items-center gap-3 relative">
-          <button
-            onClick={() => {
-              emit('bw:open:tasks', null);
-              nav('/tasks');
-            }}
-            className="h-9 min-w-[48px] px-3 grid grid-cols-[16px_auto] items-center gap-1 rounded-full border border-white/15 bg-white/10 text-white shadow-[0_10px_30px_rgba(5,9,20,0.35)]"
-            title="Your Bites"
-            aria-label="Your Bites"
-          >
-            <CoinIcon className="h-4 w-4" />
-            <span className="text-xs font-semibold">{tokens}</span>
-          </button>
-
-          <button
-            type="button"
-            className="relative h-9 w-10 grid place-items-center rounded-xl border border-white/15 bg-white/10 text-white shadow-[0_10px_30px_rgba(5,9,20,0.35)]"
-            onClick={() => nav('/cart')}
-            title="Cart"
-            aria-label="Cart"
-          >
-            <CartIcon />
-            {count > 0 && (
-              <span className="absolute translate-x-3 -translate-y-3 text-[10px] bg-rose-500 text-white rounded-full px-1 py-0.5">
-                {count}
-              </span>
-            )}
-          </button>
-
-          {/* Menu */}
-          <div className="relative" ref={menuRef}>
-            <button
-              type="button"
-              className="h-9 w-10 grid place-items-center rounded-xl border border-white/15 bg-white/10 text-white shadow-[0_10px_30px_rgba(5,9,20,0.35)]"
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-expanded={menuOpen}
-              aria-haspopup="menu"
-              title="Menu"
-            >
-              <MenuIcon />
-            </button>
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute right-0 top-full mt-2 w-[320px] max-h-[70vh] overflow-auto rounded-2xl border border-white/15 bg-[rgba(6,12,25,0.95)] backdrop-blur-2xl shadow-[0_25px_60px_rgba(3,7,15,0.7)] p-2 z-50 text-white"
-              >
-                <div className="grid gap-2">
-                  <Link
-                    to="/notifications"
-                    onClick={() => setMenuOpen(false)}
-                    className="relative block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
-                  >
-                    Notifications
-                  </Link>
-                  <Link
-                    to="/tasks"
-                    onClick={() => setMenuOpen(false)}
-                    className="relative block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
-                  >
-                    Missions
-                  </Link>
-                  <Link
-                    to="/leaderboard"
-                    onClick={() => setMenuOpen(false)}
-                    className="relative block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
-                  >
-                    Leaderboard
-                  </Link>
-                  <Link
-                    to="/achievements"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
-                  >
-                    Achievements
-                  </Link>
-                  <Link
-                    to="/orders/history"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
-                  >
-                    Order history
-                  </Link>
-                  <Link
-                    to="/settings"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-2 text-sm text-white/85 hover:bg-white/10 transition"
-                  >
-                    Settings
-                  </Link>
-                  <Link
-                    to="/admin/analytics"
-                    onClick={() => setMenuOpen(false)}
-                    className="block rounded-xl px-3 py-2 text-sm text-white/70 hover:bg-white/10 transition"
-                  >
-                    Analytics
-                  </Link>
-
-                  {/* Filters */}
-                  <details className="mt-1 rounded-xl border border-white/15 bg-white/5 open:shadow-inner">
-                    <summary className="cursor-pointer px-3 py-2 rounded text-sm text-white/90 hover:bg-white/10 select-none">
-                      Filter
-                    </summary>
-                    <div className="p-3 pt-1 grid gap-4">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-white">Price</p>
-                          <p className="text-xs text-white/60">≤ ₹{priceMax}</p>
-                        </div>
-                        <input
-                          type="range"
-                          min={50}
-                          max={1500}
-                          step={10}
-                          value={priceMax}
-                          className="w-full accent-pink-200"
-                          onChange={(e) => setPriceMax(Number(e.target.value))}
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-white">Rating</p>
-                          <p className="text-xs text-white/60">≥ {ratingMin.toFixed(1)}</p>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={5}
-                          step={0.1}
-                          value={ratingMin}
-                          className="w-full accent-pink-200"
-                          onChange={(e) => setRatingMin(Number(e.target.value))}
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-white">Distance</p>
-                          <p className="text-xs text-white/60">≤ {distanceMax} km</p>
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={20}
-                          step={1}
-                          value={distanceMax}
-                          className="w-full accent-pink-200"
-                          onChange={(e) => setDistanceMax(Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <button
-                          className="px-3 py-2 rounded border border-white/20 text-white/80 hover:bg-white/10"
-                          onClick={resetFilters}
-                        >
-                          Reset
-                        </button>
-                        <button
-                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] font-semibold shadow-lg shadow-rose-500/30"
-                          onClick={applyFilters}
-                        >
-                          Done
-                        </button>
-                      </div>
-                    </div>
-                  </details>
-
-                  {/* Logout */}
-                  <button
-                    className="mt-1 w-full px-3 py-2 rounded-xl border border-white/20 bg-white/5 text-white hover:bg-white/10 transition"
-                    onClick={logout}
-                  >
-                    Log out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <Suspense fallback={<div className="justify-self-end flex items-center gap-3 relative opacity-50"><div className="h-10 w-24 rounded-full bg-white/5" /></div>}>
+          <HeaderActions
+            menuOpen={menuOpen}
+            setMenuOpen={setMenuOpen}
+            priceMax={priceMax}
+            ratingMin={ratingMin}
+            distanceMax={distanceMax}
+            setPriceMax={setPriceMax}
+            setRatingMin={setRatingMin}
+            setDistanceMax={setDistanceMax}
+            applyFilters={applyFilters}
+            resetFilters={resetFilters}
+            logout={logout}
+            tokens={tokens}
+          />
+        </Suspense>
       </div>
 
       {botOpen && botReady && (
