@@ -17,12 +17,6 @@
       "config": { "distDir": "dist" }
     }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/[...all].ts" },
-    { "src": "/backend-api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*\\..*)", "dest": "/$1" },
-    { "src": "/(.*)", "dest": "/index.html" }
-  ],
   "headers": [
     {
       "source": "/assets/(.*)",
