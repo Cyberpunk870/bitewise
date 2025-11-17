@@ -21,10 +21,22 @@ function calcTotals(p: PriceBreakdown): { subtotal: number; total: number } {
   return { subtotal, total };
 }
 
-function Block({ title, children }: { title: string; children: React.ReactNode }) {
+function Block({
+  title,
+  children,
+  tone = 'default',
+}: {
+  title: string;
+  children: React.ReactNode;
+  tone?: 'default' | 'subtle';
+}) {
+  const toneClass =
+    tone === 'subtle'
+      ? 'bg-slate-50/90 border-slate-200/70'
+      : 'bg-white border-slate-100/80';
   return (
-    <div className="rounded-xl border bg-white p-3 shadow-sm">
-      <div className="text-sm font-medium mb-2">{title}</div>
+    <div className={`rounded-xl ${toneClass} p-3 shadow-sm`}>
+      <div className="text-sm font-semibold mb-2 text-slate-900">{title}</div>
       <div className="space-y-2">{children}</div>
     </div>
   );
@@ -79,20 +91,20 @@ export default function Compare() {
   }
 
   return (
-    <main className="min-h-screen pb-20">
+    <main className="min-h-screen pb-20 bg-gradient-to-br from-[#050915] via-[#0b1224] to-[#111e32] text-white">
       <div className="max-w-4xl mx-auto w-full px-4 pt-6">
         {/* header */}
         <div className="flex items-center justify-between mb-2">
-          <button className="px-3 py-1.5 text-sm rounded-full border bg-white/80" onClick={() => nav(-1)}>← Back</button>
+          <button className="px-3 py-1.5 text-sm rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20 transition" onClick={() => nav(-1)}>← Back</button>
           <h1 className="text-lg font-semibold text-white drop-shadow">Compare prices</h1>
           <div className="text-[11px] text-white/90">
             Last updated: <b className="tabular-nums">{timeAgo(lastSyncTs)}</b>
           </div>
         </div>
 
-        <div className="rounded-2xl bg-white/80 backdrop-blur p-3 mb-3">
-          <div className="font-semibold">{restaurant.name}</div>
-          <div className="text-sm opacity-70">
+        <div className="rounded-2xl bg-white/10 backdrop-blur-xl p-4 mb-4 border border-white/10">
+          <div className="font-semibold text-white text-lg">{restaurant.name}</div>
+          <div className="text-sm text-white/80">
             Comparing {columns.length} platform{columns.length > 1 ? 's' : ''} • {items.length} selected item{items.length !== 1 ? 's' : ''}
           </div>
         </div>
@@ -103,8 +115,10 @@ export default function Compare() {
             <div
               key={c.platform}
               className={[
-                'rounded-2xl bg-white p-4 shadow',
-                cheaper === c.platform ? 'ring-2 ring-emerald-500' : 'ring-1 ring-black/10',
+                'rounded-2xl bg-white/95 text-slate-900 p-4 shadow',
+                cheaper === c.platform
+                  ? 'ring-2 ring-emerald-500'
+                  : 'ring-1 ring-slate-200/70',
               ].join(' ')}
             >
               <div className="flex items-center justify-between mb-2">
@@ -130,14 +144,14 @@ export default function Compare() {
 
               {/* fees + promo */}
               <div className="grid grid-cols-2 gap-3 my-3">
-                <Block title="Fees">
+                <Block title="Fees" tone="subtle">
                   <div className="flex items-center justify-between text-sm"><span>Packaging</span><Money v={c.fees.packaging} /></div>
                   <div className="flex items-center justify-between text-sm"><span>Delivery</span><Money v={c.fees.delivery} /></div>
                   <div className="flex items-center justify-between text-sm"><span>Platform</span><Money v={c.fees.platformFee} /></div>
                   <div className="flex items-center justify-between text-sm"><span>Taxes</span><Money v={c.fees.tax} /></div>
                 </Block>
 
-                <Block title="Promotions">
+                <Block title="Promotions" tone="subtle">
                   {c.promo ? (
                     <>
                       <div className="text-sm">{c.promo.label}</div>
@@ -153,7 +167,7 @@ export default function Compare() {
               </div>
 
               {/* total */}
-              <div className="flex items-center justify-between border-t pt-3">
+              <div className="flex items-center justify-between border-t border-slate-200 pt-3">
                 <div className="text-sm opacity-70">Total to pay</div>
                 <div className="text-lg font-semibold"><Money v={c.total} /></div>
               </div>
@@ -192,11 +206,10 @@ export default function Compare() {
           ))}
         </div>
 
-        {columns.length >= 2 && (
-          <div className="mt-4 text-sm text-white/90">
-            Tip: We highlight the cheaper option in green. (Dummy timings/fees for now; we’ll swap in Actowiz data later.)
-          </div>
-        )}
+        <div className="mt-4 text-sm text-white/80 space-y-1">
+          <p>Tip: we highlight the cheaper option in green and surface the ETA so you instantly know which app to open.</p>
+          <p className="text-white/60">Dummy timings/fees for now; live Actowiz data will plug in automatically.</p>
+        </div>
       </div>
     </main>
   );

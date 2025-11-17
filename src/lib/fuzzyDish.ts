@@ -5,18 +5,35 @@ export type FuzzyDishMatch = {
   dish: DishRecord;
   score: number;
   matched: string;
+  reason: string;
 };
+
+const POPULAR_SLUGS = new Set(
+  DISH_CATALOG.filter((d) => d.tags?.includes('popular')).map((d) => d.slug)
+);
 
 const catalog = DISH_CATALOG.map((dish) => ({
   dish,
   keys: [
     dish.name,
-    dish.slug,
+    dish.slug.replace(/-/g, ' '),
     ...(dish.aliases || []),
     ...(dish.tags || []),
     ...(dish.cuisines || []),
-  ].map((k) => k.toLowerCase()),
+  ]
+    .map((k) => normalize(k))
+    .filter(Boolean),
 }));
+
+function normalize(input: string | undefined | null): string {
+  if (!input) return '';
+  return input
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
 
 function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
@@ -39,32 +56,69 @@ function levenshtein(a: string, b: string): number {
 }
 
 export function searchDishes(query: string, limit = 3): FuzzyDishMatch[] {
-  const q = query.trim().toLowerCase();
+  const raw = query.trim();
+  const q = normalize(raw);
   if (!q) return [];
-  const slugQuery = slugifyDish(query);
+  const slugQuery = normalize(slugifyDish(query));
+  const tokens = q.split(/\s+/).filter(Boolean);
 
   const matches: FuzzyDishMatch[] = [];
 
   catalog.forEach(({ dish, keys }) => {
     let bestScore = 0;
     let bestKey = dish.name;
+    let bestReason = '';
 
     keys.forEach((key) => {
       let score = 0;
       if (!key) return;
-      if (key === q || slugifyDish(key) === slugQuery) score += 120;
-      if (key.startsWith(q)) score += 60;
-      if (key.includes(q)) score += 35;
+      let reason = '';
+      const slugKey = normalize(slugifyDish(key));
+      if (key === q || slugKey === slugQuery) {
+        score += 150;
+        reason = `Exact match for “${raw}”`;
+      }
+      if (key.startsWith(q) && q.length >= 3) {
+        score += 70;
+        if (!reason) reason = `Starts with “${raw}”`;
+      }
+      if (key.includes(q) && q.length >= 2) {
+        score += 45;
+        if (!reason) reason = `Contains “${raw}”`;
+      }
+      const tokenMatches = tokens.filter((t) => key.includes(t));
+      if (tokenMatches.length) {
+        score += tokenMatches.length * 25;
+        if (!reason) {
+          reason =
+            tokenMatches.length === tokens.length && tokens.length > 1
+              ? `Matches keywords ${tokenMatches.join(', ')}`
+              : `Matches “${tokenMatches[0]}”`;
+        }
+      }
       const dist = levenshtein(key, q);
-      score += Math.max(0, 40 - dist * 5);
+      const fuzzyScore = Math.max(0, 55 - dist * 6);
+      if (fuzzyScore > 0) {
+        score += fuzzyScore;
+        if (!reason) reason = `Close to “${raw}”`;
+      }
+
       if (score > bestScore) {
         bestScore = score;
         bestKey = key;
+        bestReason = reason;
       }
     });
 
     if (bestScore > 25) {
-      matches.push({ dish, score: bestScore, matched: bestKey });
+      const cuisineBonus = dish.cuisines?.some((c) => tokens.includes(normalize(c))) ? 12 : 0;
+      const popularityBonus = POPULAR_SLUGS.has(dish.slug) ? 10 : 0;
+      matches.push({
+        dish,
+        score: bestScore + cuisineBonus + popularityBonus,
+        matched: bestKey,
+        reason: bestReason || (dish.cuisines?.[0] ? `Popular ${dish.cuisines[0]} pick` : 'Similar flavour profile'),
+      });
     }
   });
 

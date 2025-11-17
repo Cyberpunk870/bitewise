@@ -1,5 +1,5 @@
 // src/screens/home/Home.tsx
-import React, { useEffect, useMemo, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../components/AppHeader';
 import { useCart } from '../../store/cart';
@@ -16,6 +16,7 @@ import {
 import { usePermDecision, setPermPolicy, allowForThisSession, decidePerm } from '../../lib/permPrefs';
 import { emit } from '../../lib/events';
 import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressBook'; // ← NEW
+import FirstTimeGuide from '../../components/FirstTimeGuide';
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
@@ -198,6 +199,38 @@ export default function Home() {
     useState<{ priceMax?: number; ratingMin?: number; distanceMax?: number } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLocModalOpen, setLocModalOpen] = useState(false);
+  const [showGuide, setShowGuide] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('bw.guide.done') !== '1';
+    } catch {
+      return true;
+    }
+  });
+
+  const dismissGuide = useCallback(() => {
+    setShowGuide(false);
+    try {
+      localStorage.setItem('bw.guide.done', '1');
+    } catch {}
+  }, []);
+
+  const guideAction = useCallback(
+    (action: string) => {
+      if (action === 'compare') {
+        nav('/availability');
+        return;
+      }
+      if (action === 'missions') {
+        nav('/tasks');
+        return;
+      }
+      if (action === 'cart-focus') {
+        const el = document.getElementById('home-dish-grid');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    },
+    [nav]
+  );
   const live = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [actLabel, setActLabel] = useState<string | null>(null);
   const [locationKey, setLocationKey] = useState<string>('init');
@@ -461,7 +494,7 @@ export default function Home() {
         </div>
 
         {/* Dish grid */}
-        <section className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <section id="home-dish-grid" className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleDishes.map((d, idx) => {
             const id = String(d.id);
             const qty = qtyOf(id);
@@ -543,8 +576,8 @@ export default function Home() {
             </div>
           </div>
         )}
-
       </div>
+      {showGuide && <FirstTimeGuide onDismiss={dismissGuide} onAction={guideAction} />}
     </main>
   );
 }

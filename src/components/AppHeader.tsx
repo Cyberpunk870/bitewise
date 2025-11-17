@@ -344,9 +344,11 @@ export default function AppHeader() {
           id: `bot-${Date.now()}`,
           from: 'bot',
           text: `Here’s what I can recommend for “${trimmed}”:`,
-          suggestions: matches.map(
-            (m) => `${m.dish.name}${m.dish.cuisines?.length ? ` · ${m.dish.cuisines[0]}` : ''}`
-          ),
+          suggestions: matches.map((m) => {
+            const cuisine = m.dish.cuisines?.[0] ? ` · ${m.dish.cuisines[0]}` : '';
+            const reason = m.reason ? ` — ${m.reason}` : '';
+            return `${m.dish.name}${cuisine}${reason}`;
+          }),
         });
       } else {
         pushBotMessage({
