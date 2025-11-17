@@ -12,10 +12,9 @@ export function loadGoogleMaps(): Promise<typeof google> {
     loader = new Loader({
       apiKey,
       version: 'weekly',
-      libraries: ['places'],
+      libraries: ['places', 'marker'],
     });
   }
   if (!loadPromise) loadPromise = loader.load();
   return loadPromise;
 }
-

@@ -1,7 +1,6 @@
 // src/screens/home/Home.tsx
-import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AppHeader from '../../components/AppHeader';
 import { useCart } from '../../store/cart';
 import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
 import { getDishImage, placeholderDishUrl } from '../../lib/images';
@@ -16,10 +15,17 @@ import {
 import { usePermDecision, setPermPolicy, allowForThisSession, decidePerm } from '../../lib/permPrefs';
 import { emit } from '../../lib/events';
 import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressBook'; // ← NEW
-import FirstTimeGuide from '../../components/FirstTimeGuide';
+const AppHeader = React.lazy(() => import('../../components/AppHeader'));
+const FirstTimeGuide = React.lazy(() => import('../../components/FirstTimeGuide'));
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
+const HERO_PRELOADS = [
+  '/img/dishes/masala-dosa.jpg',
+  '/img/dishes/paneer-butter-masala.jpg',
+  '/img/dishes/chicken-biryani.jpg',
+  '/img/dishes/margherita-pizza.jpg',
+];
 
 /** --- NEW: prompt suppression (prevents loop after “Update address”) --- */
 const SUPPRESS_KEY = 'bw.locationPrompt.suppressUntil';
@@ -292,6 +298,27 @@ export default function Home() {
   /* ----- startup wiring ----- */
   useEffect(() => { ensureActiveProfile(); }, []);
   useEffect(() => {
+    const added: HTMLLinkElement[] = [];
+    HERO_PRELOADS.forEach((href) => {
+      if (!href) return;
+      const existing = Array.from(document.head.querySelectorAll('link[rel="preload"]')).some(
+        (node) => (node as HTMLLinkElement).href.endsWith(href)
+      );
+      if (existing) return;
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = href;
+      document.head.appendChild(link);
+      added.push(link);
+    });
+    return () => {
+      added.forEach((node) => {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      });
+    };
+  }, []);
+  useEffect(() => {
     try {
       const names = DISH_CATALOG.map((d: any) => d.name);
       window.dispatchEvent(new CustomEvent('bw:dishes:names', { detail: names }));
@@ -522,7 +549,9 @@ export default function Home() {
   return (
     <main className="min-h-screen text-white pb-28 px-3">
       <div className="max-w-4xl mx-auto w-full max-w-6xl px-3 pb-28">
-        <AppHeader />
+        <Suspense fallback={<div className="h-32 w-full animate-pulse rounded-2xl bg-white/5" />}>
+          <AppHeader />
+        </Suspense>
 
         {/* Tabs */}
         <div className="mt-4 flex gap-2">
@@ -674,7 +703,9 @@ export default function Home() {
         </div>
       )}
       {showGuide && (
-        <FirstTimeGuide steps={tourSteps} onDismiss={dismissGuide} onAction={guideAction} />
+        <Suspense fallback={null}>
+          <FirstTimeGuide steps={tourSteps} onDismiss={dismissGuide} onAction={guideAction} />
+        </Suspense>
       )}
     </main>
   );

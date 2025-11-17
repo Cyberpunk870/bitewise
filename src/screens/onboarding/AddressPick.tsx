@@ -56,15 +56,53 @@ export default function AddressPick() {
     setStep('addressPick');
   }, [setStep]);
 
+  useEffect(() => {
+    const g = mapsRef.current;
+    const service = autocompleteServiceRef.current;
+    if (!service || !g) {
+      setPredictions([]);
+      return;
+    }
+    if (!input.trim()) {
+      setPredictions([]);
+      return;
+    }
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => {
+      const token =
+        sessionTokenRef.current || new g.maps.places.AutocompleteSessionToken();
+      sessionTokenRef.current = token;
+      service.getPlacePredictions(
+        { input, sessionToken: token },
+        (results, status) => {
+          if (status === g.maps.places.PlacesServiceStatus.OK && results) {
+            setPredictions(results);
+          } else {
+            setPredictions([]);
+          }
+        }
+      );
+    }, 220);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [input]);
+
   // Google refs
   const mapEl = useRef<HTMLDivElement | null>(null);
   const inputEl = useRef<HTMLInputElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
+  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  const mapsRef = useRef<typeof google | null>(null);
   const mapReady = useRef(false);
   const pendingLoc = useRef<null | (() => void)>(null);
+  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [showPredictions, setShowPredictions] = useState(false);
+  const debounceRef = useRef<number | null>(null);
 
   const reverseGeocode = useCallback(async (p: Coords) => {
     const g = await loadGoogleMaps();
@@ -83,7 +121,7 @@ export default function AddressPick() {
       const map = mapRef.current;
       const marker = markerRef.current;
       if (map) map.panTo(p);
-      if (marker) marker.setPosition(p);
+      if (marker) marker.position = p;
       if (doReverse) {
         setBusy(true);
         const line = (await reverseGeocode(p)) ?? '';
@@ -94,6 +132,34 @@ export default function AddressPick() {
     [reverseGeocode]
   );
 
+  const handlePredictionSelect = useCallback(
+    (prediction: google.maps.places.AutocompletePrediction) => {
+      const g = mapsRef.current;
+      const service = placesServiceRef.current;
+      if (!g || !service) return;
+      const request: google.maps.places.PlaceDetailsRequest = {
+        placeId: prediction.place_id,
+        fields: ['formatted_address', 'geometry'],
+        sessionToken: sessionTokenRef.current || undefined,
+      };
+      service.getDetails(request, async (place, status) => {
+        if (status !== g.maps.places.PlacesServiceStatus.OK || !place?.geometry?.location) {
+          return;
+        }
+        const np = {
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+        };
+        setInput(place.formatted_address || prediction.description || '');
+        await movePin(np, false);
+        setPredictions([]);
+        setShowPredictions(false);
+        sessionTokenRef.current = new g.maps.places.AutocompleteSessionToken();
+      });
+    },
+    [movePin]
+  );
+
   // Init Google Map once
   useEffect(() => {
     let mounted = true;
@@ -102,6 +168,7 @@ export default function AddressPick() {
 
     (async () => {
       const g = await loadGoogleMaps();
+      mapsRef.current = g;
       if (!mounted || !mapEl.current) return;
 
       const center: Coords = coords ?? { lat: 28.6139, lng: 77.209 };
@@ -113,17 +180,20 @@ export default function AddressPick() {
       });
       mapRef.current = map;
 
-      const marker = new g.maps.Marker({
+      const marker = new g.maps.marker.AdvancedMarkerElement({
         map,
         position: center,
-        draggable: true,
+        gmpDraggable: true,
       });
       markerRef.current = marker;
 
       geocoderRef.current = new g.maps.Geocoder();
+      autocompleteServiceRef.current = new g.maps.places.AutocompleteService();
+      placesServiceRef.current = new g.maps.places.PlacesService(map);
+      sessionTokenRef.current = new g.maps.places.AutocompleteSessionToken();
 
-      dragEndListener = marker.addListener('dragend', async () => {
-        const pos = marker.getPosition()?.toJSON();
+      dragEndListener = marker.addListener('dragend', async (event: google.maps.MapMouseEvent) => {
+        const pos = event.latLng?.toJSON();
         if (!pos) return;
         await movePin(pos, true);
       });
@@ -133,21 +203,6 @@ export default function AddressPick() {
         const p = { lat: e.latLng.lat(), lng: e.latLng.lng() };
         movePin(p, true);
       });
-
-      if (inputEl.current) {
-        const ac = new g.maps.places.Autocomplete(inputEl.current, {
-          fields: ['formatted_address', 'geometry'],
-        });
-        autocompleteRef.current = ac;
-        ac.addListener('place_changed', () => {
-          const place = ac.getPlace();
-          const p = place?.geometry?.location;
-          if (!p) return;
-          const np = { lat: p.lat(), lng: p.lng() };
-          setInput(place?.formatted_address ?? inputEl.current!.value ?? '');
-          movePin(np, false);
-        });
-      }
 
       mapReady.current = true;
       if (pendingLoc.current) {
@@ -164,13 +219,16 @@ export default function AddressPick() {
       mapReady.current = false;
       if (markerRef.current) {
         google.maps.event.clearInstanceListeners(markerRef.current);
-        markerRef.current.setMap(null);
+        markerRef.current.map = null;
       }
       clickListener?.remove();
       dragEndListener?.remove();
       markerRef.current = null;
       mapRef.current = null;
-      autocompleteRef.current = null;
+      autocompleteServiceRef.current = null;
+      placesServiceRef.current = null;
+      sessionTokenRef.current = null;
+      mapsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // init once
@@ -256,14 +314,41 @@ export default function AddressPick() {
       onNext={handleConfirm}
     >
       <div className="w-full max-w-md mx-auto space-y-3">
-        <input
-          ref={inputEl}
-          className="w-full rounded-xl border px-4 py-2 bg-white"
-          placeholder="Start typing an address…"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          autoComplete="off"
-        />
+        <div className="relative">
+          <input
+            ref={inputEl}
+            className="w-full rounded-xl border px-4 py-2 bg-white"
+            placeholder="Start typing an address…"
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setShowPredictions(true);
+            }}
+            autoComplete="off"
+            onFocus={() => setShowPredictions(true)}
+            onBlur={() => setTimeout(() => setShowPredictions(false), 150)}
+          />
+          {showPredictions && predictions.length > 0 && (
+            <div className="absolute z-20 mt-1 w-full rounded-xl border border-black/10 bg-white shadow-lg">
+              {predictions.map((pred) => (
+                <button
+                  key={pred.place_id}
+                  type="button"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-black/5"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handlePredictionSelect(pred)}
+                >
+                  {pred.structured_formatting?.main_text || pred.description}
+                  {pred.structured_formatting?.secondary_text && (
+                    <span className="block text-xs text-black/60">
+                      {pred.structured_formatting.secondary_text}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={useMyLocation}
