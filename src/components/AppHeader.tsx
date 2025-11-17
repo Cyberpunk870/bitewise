@@ -396,6 +396,7 @@ export default function AppHeader() {
             ) : null}
           </div>
           <input
+            id="home-search-input"
             type="search"
             className="w-full rounded-xl border border-white/15 px-4 py-2 pr-20 bg-white/5 text-white shadow-[0_15px_45px_rgba(4,9,20,0.35)] backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/15 placeholder:text-white/40"
             placeholder={placeholder}

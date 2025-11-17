@@ -50,10 +50,10 @@ export default function ToastHost() {
 
   return (
     <div className="fixed left-1/2 top-4 -translate-x-1/2 z-[120] pointer-events-none" aria-live="polite">
-      <div className="pointer-events-auto rounded-xl border bg-white/95 shadow px-4 py-3 w-[min(92vw,380px)]
+      <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white/95 text-slate-900 shadow px-4 py-3 w-[min(92vw,380px)]
                       transition-all duration-300 animate-[toastIn_300ms_ease]">
         <div className="text-sm font-semibold">{active.title}</div>
-        {active.body && <div className="text-xs opacity-70 mt-0.5">{active.body}</div>}
+        {active.body && <div className="text-xs text-slate-600 mt-0.5">{active.body}</div>}
       </div>
       <style>{`
         @keyframes toastIn { from { opacity:0; transform: translateY(-6px) } to { opacity:1; transform: translateY(0) } }

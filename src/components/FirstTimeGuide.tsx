@@ -1,116 +1,136 @@
 // src/components/FirstTimeGuide.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useState } from 'react';
 
-type Step = {
+type StepConfig = {
   id: string;
+  selector: string;
   title: string;
   body: string;
-  actionLabel: string;
-  action: string;
+  actionLabel?: string;
+  action?: string;
 };
 
-const STEPS: Step[] = [
-  {
-    id: 'browse',
-    title: 'Build your cart',
-    body: 'Tap the + buttons on dishes you like. We pin them to your tray automatically.',
-    actionLabel: 'Show me dishes',
-    action: 'cart-focus',
-  },
-  {
-    id: 'compare',
-    title: 'Compare Swiggy & Zomato',
-    body: 'Add 2+ dishes, then open “Check availability” to see price differences instantly.',
-    actionLabel: 'Go to compare',
-    action: 'compare',
-  },
-  {
-    id: 'missions',
-    title: 'Keep your streak alive',
-    body: 'Finish missions to earn streak confetti, tokens, and leaderboard badges.',
-    actionLabel: 'View missions',
-    action: 'missions',
-  },
-];
-
 type Props = {
+  steps: StepConfig[];
   onDismiss: () => void;
   onAction?: (action: string) => void;
 };
 
-export default function FirstTimeGuide({ onDismiss, onAction }: Props) {
+const PADDING = 14;
+const CARD_WIDTH = 320;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+export default function FirstTimeGuide({ steps, onDismiss, onAction }: Props) {
   const [index, setIndex] = useState(0);
-  const step = useMemo(() => STEPS[index], [index]);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const step = steps[index];
 
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      setIndex((prev) => {
-        if (prev >= STEPS.length - 1) {
-          onDismiss();
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 6500);
-    return () => window.clearTimeout(id);
-  }, [index, onDismiss]);
-
-  const handleAction = () => {
-    onAction?.(step.action);
-  };
-
-  const handleNext = () => {
-    if (index >= STEPS.length - 1) {
-      onDismiss();
+  useLayoutEffect(() => {
+    if (!step?.selector) {
+      setRect(null);
       return;
     }
-    setIndex((i) => Math.min(i + 1, STEPS.length - 1));
+    const node = document.querySelector(step.selector) as HTMLElement | null;
+    if (!node) {
+      setRect(null);
+      return;
+    }
+    const update = () => {
+      const r = node.getBoundingClientRect();
+      setRect(r);
+    };
+    update();
+    const resize = () => update();
+    const obs = new MutationObserver(() => update());
+    obs.observe(node, { attributes: true, childList: false, subtree: false });
+    window.addEventListener('resize', resize);
+    window.addEventListener('scroll', resize, true);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('resize', resize);
+      window.removeEventListener('scroll', resize, true);
+    };
+  }, [step?.selector, index]);
+
+  const highlightStyle = useMemo(() => {
+    if (!rect) return null;
+    const top = clamp(rect.top - PADDING, 10, window.innerHeight - 40);
+    const left = clamp(rect.left - PADDING, 10, window.innerWidth - 40);
+    return {
+      top,
+      left,
+      width: rect.width + PADDING * 2,
+      height: rect.height + PADDING * 2,
+    };
+  }, [rect]);
+
+  if (!step) return null;
+
+  const cardTop = rect
+    ? clamp(rect.bottom + 18, 20, window.innerHeight - 200)
+    : window.innerHeight / 2 - 120;
+  const cardLeft = rect
+    ? clamp(rect.left, 16, window.innerWidth - CARD_WIDTH - 16)
+    : (window.innerWidth - CARD_WIDTH) / 2;
+
+  const goNext = () => {
+    if (index >= steps.length - 1) {
+      onDismiss();
+    } else {
+      setIndex((i) => i + 1);
+    }
   };
 
   return (
-    <aside className="fixed bottom-4 left-4 z-40 max-w-xs rounded-2xl border border-white/15 bg-[#0b1224]/90 p-4 text-white shadow-2xl backdrop-blur">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-white/60 mb-1">Quick tour</p>
-          <h3 className="text-lg font-semibold">{step.title}</h3>
+    <div className="fixed inset-0 z-[140] text-white">
+      <div className="absolute inset-0 bg-[rgba(5,9,20,0.78)] backdrop-blur-[1px]" />
+
+      {highlightStyle && (
+        <div
+          className="absolute pointer-events-none rounded-2xl border-2 border-orange-400/80 shadow-[0_0_0_9999px_rgba(5,9,20,0.78)] transition-all duration-200"
+          style={highlightStyle as React.CSSProperties}
+        />
+      )}
+
+      <button
+        type="button"
+        className="absolute top-4 right-4 rounded-full border border-white/40 bg-white/10 px-4 py-1 text-sm text-white/80 hover:text-white transition"
+        onClick={onDismiss}
+      >
+        Skip
+      </button>
+
+      <div
+        className="absolute w-[min(92vw,320px)] rounded-2xl border border-white/15 bg-[#0b1224]/90 p-4 shadow-2xl pointer-events-auto"
+        style={{ top: cardTop, left: cardLeft }}
+      >
+        <p className="text-xs uppercase tracking-[0.25em] text-white/60 mb-2">
+          Step {index + 1} / {steps.length}
+        </p>
+        <h3 className="text-lg font-semibold">{step.title}</h3>
+        <p className="text-sm text-white/80 mt-2">{step.body}</p>
+        <div className="mt-4 flex items-center gap-2">
+          {step.actionLabel && (
+            <button
+              type="button"
+              className="flex-1 rounded-xl bg-white text-black text-sm font-semibold py-2 shadow"
+              onClick={() => step.action && onAction?.(step.action!)}
+            >
+              {step.actionLabel}
+            </button>
+          )}
+          <button
+            type="button"
+            className="rounded-xl border border-white/30 px-4 py-2 text-sm text-white/80 hover:text-white"
+            onClick={goNext}
+          >
+            {index >= steps.length - 1 ? 'Finish' : 'Next'}
+          </button>
         </div>
-        <button
-          type="button"
-          aria-label="Skip tutorial"
-          className="text-white/60 hover:text-white"
-          onClick={onDismiss}
-        >
-          ×
-        </button>
       </div>
-      <p className="mt-2 text-sm text-white/80">{step.body}</p>
-      <div className="mt-4 flex items-center gap-2">
-        <button
-          type="button"
-          className="flex-1 rounded-xl bg-white text-black text-sm font-semibold py-2 shadow"
-          onClick={handleAction}
-        >
-          {step.actionLabel}
-        </button>
-        <button
-          type="button"
-          className="rounded-xl border border-white/20 px-3 py-2 text-sm text-white/80 hover:text-white"
-          onClick={handleNext}
-        >
-          Next
-        </button>
-      </div>
-      <div className="mt-3 flex gap-1">
-        {STEPS.map((s, i) => (
-          <span
-            key={s.id}
-            className={[
-              'h-1.5 flex-1 rounded-full',
-              i <= index ? 'bg-white' : 'bg-white/30',
-            ].join(' ')}
-          />
-        ))}
-      </div>
-    </aside>
+    </div>
   );
 }

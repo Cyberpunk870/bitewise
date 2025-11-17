@@ -206,6 +206,9 @@ export default function Home() {
       return true;
     }
   });
+  const [profile, setProfile] = useState(() => getActiveProfile());
+  const [showLabelModal, setShowLabelModal] = useState(false);
+  const [labelSuggestion, setLabelSuggestion] = useState<string>('Home');
 
   const dismissGuide = useCallback(() => {
     setShowGuide(false);
@@ -227,9 +230,44 @@ export default function Home() {
       if (action === 'cart-focus') {
         const el = document.getElementById('home-dish-grid');
         el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (action === 'focus-search') {
+        const input = document.getElementById('home-search-input') as HTMLInputElement | null;
+        input?.focus();
+        return;
       }
     },
     [nav]
+  );
+  const tourSteps = useMemo(
+    () => [
+      {
+        id: 'search',
+        selector: '#home-search-input',
+        title: 'Search any craving',
+        body: 'Use the search bar to jump to biryani, pizza, or anything else instantly.',
+        actionLabel: 'Try search',
+        action: 'focus-search',
+      },
+      {
+        id: 'add',
+        selector: '#home-dish-grid',
+        title: 'Add dishes to compare',
+        body: 'Tap the cards to add dishes to your cart. We only need two to start comparing.',
+        actionLabel: 'Scroll dishes',
+        action: 'cart-focus',
+      },
+      {
+        id: 'compare',
+        selector: '#home-compare-cta',
+        title: 'Find the cheapest platform',
+        body: 'Hit “Check availability” to see Swiggy vs Zomato pricing before you order.',
+        actionLabel: 'Open compare',
+        action: 'compare',
+      },
+    ],
+    []
   );
   const live = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [actLabel, setActLabel] = useState<string | null>(null);
@@ -318,6 +356,7 @@ export default function Home() {
         live.current = newLive;
         setActLabel(typeof meters === 'number' ? `${meters} m` : 'New position');
         setLocModalOpen(true);
+        maybePromptLabel();
       });
 
       if (res === 'auto-switched') {
@@ -345,12 +384,14 @@ export default function Home() {
           live.current = coords;
           setActLabel(`${Math.round(meters)} m`);
           setLocModalOpen(true);
+          maybePromptLabel();
         }
       } else {
         // no saved addresses → behave like before
         live.current = coords;
         setActLabel('New position');
         setLocModalOpen(true);
+        maybePromptLabel();
       }
     };
 
@@ -384,7 +425,7 @@ export default function Home() {
       window.removeEventListener('bw:profile:update' as any, onProfileUpdate as any);
       window.removeEventListener('storage', onProfileUpdate as any);
     };
-  }, [locPerm]);
+  }, [locPerm, maybePromptLabel]);
 
   /* ----- listing ----- */
   const visibleDishes = useMemo(() => {
@@ -530,6 +571,7 @@ export default function Home() {
                 ))}
               </div>
               <button
+                id="home-compare-cta"
                 type="button"
                 className="px-3 py-1.5 text-sm rounded-full bg-black text-white"
                 onClick={(e) => {
@@ -555,12 +597,21 @@ export default function Home() {
                     ? `You're ~${actLabel} from your saved address. Update for accurate prices.`
                     : 'Update your location for accurate prices.'}
                 </p>
-                <div className="flex gap-2 justify-end">
+                <div className="flex flex-wrap gap-2 justify-end">
                   <button
                     className="rounded-xl border border-white/30 px-3 py-2 text-sm text-white/80"
                     onClick={() => setLocModalOpen(false)}
                   >
                     Not now
+                  </button>
+                  <button
+                    className="rounded-xl border border-white/30 px-3 py-2 text-sm text-white/80"
+                    onClick={() => {
+                      setShowLabelModal(true);
+                      setLocModalOpen(false);
+                    }}
+                  >
+                    Edit label
                   </button>
                   <button
                     className="rounded-xl px-3 py-2 text-sm bg-white text-black font-semibold"
@@ -577,7 +628,65 @@ export default function Home() {
           </div>
         )}
       </div>
-      {showGuide && <FirstTimeGuide onDismiss={dismissGuide} onAction={guideAction} />}
+      {showLabelModal && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 grid place-items-center px-4">
+          <div className="glass-card border-white/10 text-white p-5 max-w-sm w-full">
+            <p className="font-semibold mb-2">Add a nickname</p>
+            <p className="text-sm text-white/70">
+              Give this address a quick label like “Home” or “Work” so we can switch faster later.
+            </p>
+            <p className="text-xs text-white/50 mt-2">Suggested: {labelSuggestion}</p>
+            <div className="flex flex-wrap gap-2 justify-end mt-4">
+              <button
+                className="rounded-xl border border-white/30 px-3 py-2 text-sm text-white/80"
+                onClick={() => {
+                  setShowLabelModal(false);
+                  try { sessionStorage.setItem('bw.labelPrompt.skip', '1'); } catch {}
+                }}
+              >
+                Later
+              </button>
+              <button
+                className="rounded-xl px-3 py-2 text-sm bg-white text-black font-semibold"
+                onClick={() => {
+                  setShowLabelModal(false);
+                  nav('/onboarding/address/label');
+                }}
+              >
+                Label address
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showGuide && (
+        <FirstTimeGuide steps={tourSteps} onDismiss={dismissGuide} onAction={guideAction} />
+      )}
     </main>
   );
 }
+  useEffect(() => {
+    const refresh = () => setProfile(getActiveProfile());
+    window.addEventListener('storage', refresh);
+    window.addEventListener('bw:profile:update' as any, refresh as any);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('bw:profile:update' as any, refresh as any);
+    };
+  }, []);
+
+  const maybePromptLabel = useCallback(() => {
+    try {
+      if (sessionStorage.getItem('bw.labelPrompt.skip') === '1') return;
+    } catch {}
+    const active = getActiveProfile();
+    if (!active?.addressLine || active.addressLabel) return;
+    setLabelSuggestion(deriveAddressLabel(active.addressLine) || 'Home');
+    setShowLabelModal(true);
+  }, []);
+
+  useEffect(() => {
+    if (!profile?.addressLine || profile?.addressLabel) return;
+    const timer = window.setTimeout(() => maybePromptLabel(), 1200);
+    return () => window.clearTimeout(timer);
+  }, [profile?.addressLine, profile?.addressLabel, maybePromptLabel]);
