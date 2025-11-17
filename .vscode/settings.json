@@ -1,0 +1,33 @@
+{
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/app/build/**": true,
+    "**/app/.gradle/**": true,
+    "**/.gradle/**": true,
+    "**/backend-cjs/**": true,
+    "**/dist/backend-lib/**": true,
+    "**/firebase/**": true
+  },
+  "files.exclude": {
+    "**/node_modules": true,
+    "dist": true,
+    "build": true,
+    "app/build": true,
+    "backend-cjs": true,
+    ".gradle": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "dist": true,
+    "build": true,
+    "app/build": true,
+    "backend-cjs": true,
+    ".gradle": true
+  },
+  "typescript.tsserver.maxTsServerMemory": 4096,
+  "typescript.tsserver.experimental.enableProjectDiagnostics": false,
+  "javascript.suggest.autoImports": false,
+  "typescript.suggest.autoImports": false
+}

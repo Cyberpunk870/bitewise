@@ -230,12 +230,6 @@ export default function Home() {
       if (action === 'cart-focus') {
         const el = document.getElementById('home-dish-grid');
         el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-      }
-      if (action === 'focus-search') {
-        const input = document.getElementById('home-search-input') as HTMLInputElement | null;
-        input?.focus();
-        return;
       }
     },
     [nav]
@@ -244,23 +238,18 @@ export default function Home() {
     () => [
       {
         id: 'search',
-        selector: '#home-search-input',
         title: 'Search any craving',
-        body: 'Use the search bar to jump to biryani, pizza, or anything else instantly.',
-        actionLabel: 'Try search',
-        action: 'focus-search',
+        body: 'Use search or voice to jump straight to your favourite dishes.',
       },
       {
         id: 'add',
-        selector: '#home-dish-grid',
         title: 'Add dishes to compare',
-        body: 'Tap the cards to add dishes to your cart. We only need two to start comparing.',
-        actionLabel: 'Scroll dishes',
+        body: 'Tap a card to add it to your cart. Two dishes are enough to start comparing.',
+        actionLabel: 'See dishes',
         action: 'cart-focus',
       },
       {
         id: 'compare',
-        selector: '#home-compare-cta',
         title: 'Find the cheapest platform',
         body: 'Hit “Check availability” to see Swiggy vs Zomato pricing before you order.',
         actionLabel: 'Open compare',
