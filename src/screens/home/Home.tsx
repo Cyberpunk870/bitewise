@@ -258,6 +258,31 @@ export default function Home() {
     ],
     []
   );
+  useEffect(() => {
+    const refresh = () => setProfile(getActiveProfile());
+    window.addEventListener('storage', refresh);
+    window.addEventListener('bw:profile:update' as any, refresh as any);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('bw:profile:update' as any, refresh as any);
+    };
+  }, []);
+
+  const maybePromptLabel = useCallback(() => {
+    try {
+      if (sessionStorage.getItem('bw.labelPrompt.skip') === '1') return;
+    } catch {}
+    const active = getActiveProfile();
+    if (!active?.addressLine || active.addressLabel) return;
+    setLabelSuggestion(deriveAddressLabel(active.addressLine) || 'Home');
+    setShowLabelModal(true);
+  }, []);
+
+  useEffect(() => {
+    if (!profile?.addressLine || profile?.addressLabel) return;
+    const timer = window.setTimeout(() => maybePromptLabel(), 1200);
+    return () => window.clearTimeout(timer);
+  }, [profile?.addressLine, profile?.addressLabel, maybePromptLabel]);
   const live = useRef<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [actLabel, setActLabel] = useState<string | null>(null);
   const [locationKey, setLocationKey] = useState<string>('init');
@@ -654,28 +679,3 @@ export default function Home() {
     </main>
   );
 }
-  useEffect(() => {
-    const refresh = () => setProfile(getActiveProfile());
-    window.addEventListener('storage', refresh);
-    window.addEventListener('bw:profile:update' as any, refresh as any);
-    return () => {
-      window.removeEventListener('storage', refresh);
-      window.removeEventListener('bw:profile:update' as any, refresh as any);
-    };
-  }, []);
-
-  const maybePromptLabel = useCallback(() => {
-    try {
-      if (sessionStorage.getItem('bw.labelPrompt.skip') === '1') return;
-    } catch {}
-    const active = getActiveProfile();
-    if (!active?.addressLine || active.addressLabel) return;
-    setLabelSuggestion(deriveAddressLabel(active.addressLine) || 'Home');
-    setShowLabelModal(true);
-  }, []);
-
-  useEffect(() => {
-    if (!profile?.addressLine || profile?.addressLabel) return;
-    const timer = window.setTimeout(() => maybePromptLabel(), 1200);
-    return () => window.clearTimeout(timer);
-  }, [profile?.addressLine, profile?.addressLabel, maybePromptLabel]);
