@@ -7,14 +7,12 @@ import RewardHost from '../components/RewardHost';
 import ConfettiBurst from '../components/ConfettiBurst';
 import { MissionStatsProvider } from '../components/StreakBadge';
 import { clearSessionPerms, decidePerm } from '../lib/permPrefs';
-import { startTaskEngine } from '../lib/TaskEngine';
 import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
 import { emit, on } from '../lib/events';
 import { syncTokensFromCloud } from '../lib/tokens';
 // 🔄 Cloud profile
 import { hydrateActiveFromCloud, pushActiveToCloud } from '../lib/cloudProfile';
 // Passive live pings (no prompts)
-import { startLiveLocationWatcher } from '../lib/location';
 
 // ✅ NEW: hook up push init when auth/permission are ready
 import { initOrRefreshPushOnAuth } from '../lib/notify';
@@ -258,14 +256,67 @@ export default function AppShell() {
 
   /* Tasks engine */
   useEffect(() => {
-    const stop = startTaskEngine();
-    return () => stop?.();
+    let cleanup: (() => void) | null = null;
+    let cancelled = false;
+
+    const boot = async () => {
+      try {
+        const mod = await import('../lib/TaskEngine');
+        if (cancelled) return;
+        cleanup = mod.startTaskEngine();
+      } catch (err) {
+        console.error('Task engine failed to start', err);
+      }
+    };
+
+    let idleId: number | null = null;
+    const idleCb = () => {
+      idleId = null;
+      boot();
+    };
+
+    if ('requestIdleCallback' in window) {
+      idleId = (window as any).requestIdleCallback(idleCb, { timeout: 2000 });
+    } else {
+      idleId = window.setTimeout(idleCb, 1200);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId != null) {
+        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+          (window as any).cancelIdleCallback(idleId);
+        } else {
+          window.clearTimeout(idleId);
+        }
+      }
+      cleanup?.();
+    };
   }, []);
 
   /* Passive live pings */
   useEffect(() => {
-    const stop = startLiveLocationWatcher(20000);
-    return () => stop();
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const boot = async () => {
+      try {
+        const mod = await import('../lib/location');
+        if (cancelled) return;
+        stop = mod.startLiveLocationWatcher(20000);
+      } catch (err) {
+        console.error('Live location watcher failed to start', err);
+      }
+    };
+
+    timer = window.setTimeout(boot, 1500);
+
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+      stop?.();
+    };
   }, []);
 
   return (

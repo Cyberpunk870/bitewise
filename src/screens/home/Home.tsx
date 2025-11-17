@@ -1,5 +1,14 @@
 // src/screens/home/Home.tsx
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
+import React, {
+  Suspense,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  memo,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../store/cart';
 import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
@@ -468,6 +477,11 @@ export default function Home() {
     };
   }, [locPerm, maybePromptLabel]);
 
+  const deferredQuery = useDeferredValue(query);
+  const deferredFilters = useDeferredValue(filters);
+  const deferredItemsMap = useDeferredValue(itemsMap);
+  const deferredLocationKey = useDeferredValue(locationKey);
+
   /* ----- listing ----- */
   const visibleDishes = useMemo(() => {
     let list = DISH_CATALOG.slice(0);
@@ -484,8 +498,8 @@ export default function Home() {
       default:
         break;
     }
-    if (filters) {
-      const { priceMax, ratingMin, distanceMax } = filters;
+    if (deferredFilters) {
+      const { priceMax, ratingMin, distanceMax } = deferredFilters;
       list = list.filter((d: any) => {
         const price = typeof d.price === 'number' ? d.price : undefined;
         const distance = (d as any).distance as number | undefined;
@@ -496,8 +510,8 @@ export default function Home() {
         return okP && okR && okD;
       });
     }
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
+    if (deferredQuery.trim()) {
+      const q = deferredQuery.trim().toLowerCase();
       list = list.filter((d: any) => d.name.toLowerCase().includes(q));
     }
     return (list as any[]).map((d: any) => ({
@@ -507,7 +521,7 @@ export default function Home() {
       rating: d.rating,
       image: getDishImage(d.name, d.imageUrl),
     })) as DishVM[];
-  }, [activeTab, query, filters, locationKey, itemsMap]);
+  }, [activeTab, deferredQuery, deferredFilters, deferredLocationKey, deferredItemsMap]);
 
   /* ----- helpers ----- */
   const qtyOf = (id: string | number) => (itemsMap as any)?.[String(id)]?.qty ?? 0;

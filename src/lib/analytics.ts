@@ -16,15 +16,27 @@ type EventInput = {
 
 const queue: Array<{ name: AnalyticsEventName; props?: Record<string, unknown>; ts: number }> = [];
 let flushTimer: number | null = null;
+let idleHandle: number | null = null;
 const API_BASE =
   import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:3000/api" : "/api");
 
 function scheduleFlush(delay = 1500) {
-  if (flushTimer) return;
-  flushTimer = window.setTimeout(() => {
-    flushTimer = null;
-    void flush();
-  }, delay);
+  if (flushTimer || idleHandle) return;
+  const useIdle = typeof window !== "undefined" && "requestIdleCallback" in window;
+  if (useIdle) {
+    idleHandle = (window as any).requestIdleCallback(
+      () => {
+        idleHandle = null;
+        void flush();
+      },
+      { timeout: delay }
+    );
+  } else {
+    flushTimer = window.setTimeout(() => {
+      flushTimer = null;
+      void flush();
+    }, delay);
+  }
 }
 
 async function flush() {
@@ -52,6 +64,11 @@ async function flush() {
     console.warn("[analytics] flush failed", err);
     queue.unshift(...batch);
     scheduleFlush(5000);
+  } finally {
+    if (idleHandle && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+      (window as any).cancelIdleCallback(idleHandle);
+      idleHandle = null;
+    }
   }
 }
 

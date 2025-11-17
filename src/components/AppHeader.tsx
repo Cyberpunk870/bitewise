@@ -71,16 +71,72 @@ export default function AppHeader() {
   const nav = useNavigate();
   const { count } = useCart();
   const fuzzyRef = useRef<((query: string, limit?: number) => FuzzyDishMatch[]) | null>(null);
+  const [botReady, setBotReady] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    import('../lib/fuzzyDish')
-      .then((mod) => {
-        if (mounted) fuzzyRef.current = mod.searchDishes;
-      })
-      .catch(() => {});
+    let idleHandle: number | null = null;
+    const load = () => {
+      import('../lib/fuzzyDish')
+        .then((mod) => {
+          if (mounted) fuzzyRef.current = mod.searchDishes;
+        })
+        .catch(() => {});
+    };
+    const schedule = () => {
+      if ('requestIdleCallback' in window) {
+        idleHandle = (window as any).requestIdleCallback(
+          () => {
+            idleHandle = null;
+            load();
+          },
+          { timeout: 2000 }
+        );
+      } else {
+        idleHandle = window.setTimeout(() => {
+          idleHandle = null;
+          load();
+        }, 1200);
+      }
+    };
+    schedule();
     return () => {
       mounted = false;
+      if (idleHandle != null) {
+        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+          (window as any).cancelIdleCallback(idleHandle);
+        } else {
+          window.clearTimeout(idleHandle);
+        }
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let handle: number | null = null;
+    const markReady = () => setBotReady(true);
+    if ('requestIdleCallback' in window) {
+      handle = (window as any).requestIdleCallback(
+        () => {
+          handle = null;
+          markReady();
+        },
+        { timeout: 2500 }
+      );
+    } else {
+      handle = window.setTimeout(() => {
+        handle = null;
+        markReady();
+      }, 1800);
+    }
+    return () => {
+      if (handle != null) {
+        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+          (window as any).cancelIdleCallback(handle);
+        } else {
+          window.clearTimeout(handle);
+        }
+      }
     };
   }, []);
 
@@ -608,7 +664,7 @@ export default function AppHeader() {
         </div>
       </div>
 
-      {botOpen && (
+      {botOpen && botReady && (
         <Suspense fallback={null}>
           <BotShell
             onClose={() => setBotOpen(false)}
@@ -623,14 +679,16 @@ export default function AppHeader() {
       )}
 
       {/* Floating Yummibot */}
-      <button
-        type="button"
-        aria-label="Yummibot"
-        onClick={() => setBotOpen((v) => !v)}
-        className="fixed right-4 bottom-4 h-14 w-14 grid place-items-center rounded-full shadow-2xl border border-white/20 bg-white/10 text-white z-40 backdrop-blur"
-      >
-        <BurgerAvatar className="h-9 w-9" />
-      </button>
+      {botReady && (
+        <button
+          type="button"
+          aria-label="Yummibot"
+          onClick={() => setBotOpen((v) => !v)}
+          className="fixed right-4 bottom-4 h-14 w-14 grid place-items-center rounded-full shadow-2xl border border-white/20 bg-white/10 text-white z-40 backdrop-blur"
+        >
+          <BurgerAvatar className="h-9 w-9" />
+        </button>
+      )}
     </header>
   );
 }
