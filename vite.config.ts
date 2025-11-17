@@ -1,12 +1,23 @@
-import { defineConfig, splitVendorChunkPlugin } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
+const vendorChunk = (id: string) => {
+  if (id.includes('node_modules')) {
+    if (/node_modules\/(react|react-dom|react-router-dom)/.test(id)) {
+      return 'vendor-react';
+    }
+    if (/node_modules\/firebase/.test(id)) {
+      return 'vendor-firebase';
+    }
+    if (/node_modules\/(@googlemaps|framer-motion|zustand)/.test(id)) {
+      return 'vendor-utils';
+    }
+  }
+};
+
 export default defineConfig({
-  plugins: [
-    react(),
-    splitVendorChunkPlugin()
-  ],
+  plugins: [react()],
   publicDir: 'public',
   root: '.', // Tell Vite to treat project root as the frontend root
   build: {
@@ -15,11 +26,7 @@ export default defineConfig({
     rollupOptions: {
       input: resolve(__dirname, 'index.html'), // Explicitly set input
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-firebase': ['firebase', 'firebase-admin'],
-          'vendor-utils': ['zustand', 'framer-motion', '@googlemaps/js-api-loader']
-        }
+        manualChunks: vendorChunk
       }
     }
   }
