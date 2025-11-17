@@ -17,6 +17,10 @@
       "config": { "distDir": "dist" }
     }
   ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/[...all].ts" },
+    { "source": "/backend-api/(.*)", "destination": "/api/$1" }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",
