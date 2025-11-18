@@ -14,6 +14,7 @@ import {
   type User,
 } from "firebase/auth";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { setActivePhone, upsertUser } from "./profileStore";
 
 // read once here so everything else can branch on it
 const USE_CLOUD = import.meta.env.VITE_USE_FIRESTORE === "1";
@@ -296,6 +297,15 @@ export async function confirmOtp(code: string) {
     };
     localStorage.setItem("bw_session", JSON.stringify(payload));
     if (payload.phone) sessionStorage.setItem("bw.session.phone", payload.phone);
+    if (payload.phone) {
+      try {
+        setActivePhone(payload.phone);
+        upsertUser({
+          phone: payload.phone,
+          name: cred.user.displayName || "Guest",
+        } as any);
+      } catch {}
+    }
   } catch {}
 
   // Wait until Firebase emits the post-sign-in state
