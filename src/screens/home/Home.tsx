@@ -26,19 +26,9 @@ import { emit } from '../../lib/events';
 import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressBook'; // ← NEW
 const AppHeader = React.lazy(() => import('../../components/AppHeader'));
 const FirstTimeGuide = React.lazy(() => import('../../components/FirstTimeGuide'));
-const MissionsStrip = React.lazy(() => import('./sections/MissionsStrip'));
-const AnalyticsPeek = React.lazy(() => import('./sections/AnalyticsPeek'));
-const YummiBotTeaser = React.lazy(() => import('./sections/YummiBotTeaser'));
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
-const HERO_BASES = [
-  '/img/dishes/masala-dosa',
-  '/img/dishes/paneer-butter-masala',
-  '/img/dishes/chicken-biryani',
-  '/img/dishes/margherita-pizza',
-];
-const HERO_PRELOADS = HERO_BASES.flatMap((base) => [`${base}.avif`, `${base}.webp`, `${base}.jpg`]);
 
 /** --- NEW: prompt suppression (prevents loop after “Update address”) --- */
 const SUPPRESS_KEY = 'bw.locationPrompt.suppressUntil';
@@ -237,7 +227,6 @@ export default function Home() {
   const [profile, setProfile] = useState(() => getActiveProfile());
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelSuggestion, setLabelSuggestion] = useState<string>('Home');
-  const [showInsights, setShowInsights] = useState(false);
 
   const dismissGuide = useCallback(() => {
     setShowGuide(false);
@@ -287,25 +276,7 @@ export default function Home() {
     ],
     []
   );
-useEffect(() => {
-  const added: HTMLLinkElement[] = [];
-  HERO_PRELOADS.forEach((href) => {
-    if (!href) return;
-    const exists = Array.from(document.querySelectorAll('link[rel="preload"]')).some((link) => link.getAttribute('href') === href);
-    if (exists) return;
-    const linkEl = document.createElement('link');
-    linkEl.rel = 'preload';
-    linkEl.as = 'image';
-    linkEl.href = href;
-    document.head.appendChild(linkEl);
-    added.push(linkEl);
-  });
-  return () => {
-    added.forEach((node) => node.remove());
-  };
-}, []);
-
-useEffect(() => {
+  useEffect(() => {
     const refresh = () => setProfile(getActiveProfile());
     window.addEventListener('storage', refresh);
     window.addEventListener('bw:profile:update' as any, refresh as any);
@@ -343,27 +314,6 @@ useEffect(() => {
 
   /* ----- startup wiring ----- */
   useEffect(() => { ensureActiveProfile(); }, []);
-  useEffect(() => {
-    const added: HTMLLinkElement[] = [];
-    HERO_PRELOADS.forEach((href) => {
-      if (!href) return;
-      const existing = Array.from(document.head.querySelectorAll('link[rel="preload"]')).some(
-        (node) => (node as HTMLLinkElement).href.endsWith(href)
-      );
-      if (existing) return;
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = href;
-      document.head.appendChild(link);
-      added.push(link);
-    });
-    return () => {
-      added.forEach((node) => {
-        if (node.parentNode) node.parentNode.removeChild(node);
-      });
-    };
-  }, []);
   useEffect(() => {
     try {
       const names = DISH_CATALOG.map((d: any) => d.name);
@@ -548,62 +498,6 @@ useEffect(() => {
     };
   }, []);
 
-  useEffect(() => {
-    if (showInsights) return;
-    let fired = false;
-    let idleHandle: number | null = null;
-    let timer: number | null = null;
-
-    const enable = () => {
-      if (fired) return;
-      fired = true;
-      setShowInsights(true);
-    };
-
-    const onPointer = () => enable();
-    const onKey = () => enable();
-    const onScroll = () => enable();
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('pointerdown', onPointer, { once: true, passive: true });
-      window.addEventListener('keydown', onKey, { once: true });
-      window.addEventListener('scroll', onScroll, { once: true, passive: true });
-    }
-
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      idleHandle = (window as any).requestIdleCallback(
-        () => {
-          idleHandle = null;
-          enable();
-        },
-        { timeout: 2500 }
-      );
-    } else {
-      timer = window.setTimeout(() => {
-        timer = null;
-        enable();
-      }, 2200);
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('pointerdown', onPointer);
-        window.removeEventListener('keydown', onKey);
-        window.removeEventListener('scroll', onScroll);
-      }
-      if (idleHandle != null) {
-        if (typeof window !== 'undefined' && 'cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
-          (window as any).cancelIdleCallback(idleHandle);
-        } else {
-          window.clearTimeout(idleHandle);
-        }
-      }
-      if (timer != null) {
-        window.clearTimeout(timer);
-      }
-    };
-  }, [showInsights]);
-
   /* ----- listing ----- */
   const visibleDishes = useMemo(() => {
     let list = DISH_CATALOG.slice(0);
@@ -688,28 +582,6 @@ useEffect(() => {
         <Suspense fallback={<div className="h-32 w-full animate-pulse rounded-2xl bg-white/5" />}>
           <AppHeader />
         </Suspense>
-
-        {showInsights && (
-          <Suspense
-            fallback={
-              <div className="mt-6 grid gap-4 lg:grid-cols-[2fr_1fr]">
-                <div className="h-40 rounded-3xl bg-white/5 animate-pulse" />
-                <div className="grid gap-4">
-                  <div className="h-32 rounded-3xl bg-white/5 animate-pulse" />
-                  <div className="h-32 rounded-3xl bg-white/5 animate-pulse" />
-                </div>
-              </div>
-            }
-          >
-            <div className="mt-6 grid gap-4 lg:grid-cols-[2fr_1fr]">
-              <MissionsStrip />
-              <div className="grid gap-4">
-                <AnalyticsPeek />
-                <YummiBotTeaser />
-              </div>
-            </div>
-          </Suspense>
-        )}
 
         {/* Tabs */}
         <div className="mt-4 flex gap-2">

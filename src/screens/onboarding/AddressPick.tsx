@@ -10,6 +10,10 @@ import { getAuth } from 'firebase/auth';                    // ✅ NEW
 import { addAddress as apiAddAddress } from '../../lib/api'; // ✅ NEW
 
 type Coords = { lat: number; lng: number };
+type SuggestionEntry = {
+  suggestion: google.maps.places.AutocompleteSuggestion;
+  prediction: google.maps.places.PlacePrediction;
+};
 
 export default function AddressPick() {
   const nav = useNavigate();
@@ -56,53 +60,54 @@ export default function AddressPick() {
     setStep('addressPick');
   }, [setStep]);
 
-  useEffect(() => {
-    const g = mapsRef.current;
-    const service = autocompleteServiceRef.current;
-    if (!service || !g) {
-      setPredictions([]);
-      return;
-    }
-    if (!input.trim()) {
-      setPredictions([]);
-      return;
-    }
-    if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    debounceRef.current = window.setTimeout(() => {
-      const token =
-        sessionTokenRef.current || new g.maps.places.AutocompleteSessionToken();
-      sessionTokenRef.current = token;
-      service.getPlacePredictions(
-        { input, sessionToken: token },
-        (results, status) => {
-          if (status === g.maps.places.PlacesServiceStatus.OK && results) {
-            setPredictions(results);
-          } else {
-            setPredictions([]);
-          }
-        }
-      );
-    }, 220);
-    return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current);
-    };
-  }, [input]);
-
   // Google refs
   const mapEl = useRef<HTMLDivElement | null>(null);
   const inputEl = useRef<HTMLInputElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
-  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null);
-  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+  const placesLibRef = useRef<google.maps.PlacesLibrary | null>(null);
   const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const mapsRef = useRef<typeof google | null>(null);
   const mapReady = useRef(false);
   const pendingLoc = useRef<null | (() => void)>(null);
-  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
+  const [predictions, setPredictions] = useState<SuggestionEntry[]>([]);
   const [showPredictions, setShowPredictions] = useState(false);
   const debounceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const lib = placesLibRef.current;
+    if (!lib || !input.trim()) {
+      setPredictions([]);
+      return;
+    }
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(async () => {
+      try {
+        const { AutocompleteSuggestion, AutocompleteSessionToken } = lib;
+        if (!AutocompleteSuggestion || !AutocompleteSessionToken) return;
+        const token = sessionTokenRef.current || new AutocompleteSessionToken();
+        sessionTokenRef.current = token;
+        const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input,
+          sessionToken: token,
+        });
+        const entries: SuggestionEntry[] = (suggestions || []).reduce((acc, suggestion) => {
+          if (suggestion.placePrediction) {
+            acc.push({ suggestion, prediction: suggestion.placePrediction });
+          }
+          return acc;
+        }, [] as SuggestionEntry[]);
+        setPredictions(entries);
+      } catch (err) {
+        console.warn('[places] autocomplete failed', err);
+        setPredictions([]);
+      }
+    }, 220);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [input]);
 
   const reverseGeocode = useCallback(async (p: Coords) => {
     const g = await loadGoogleMaps();
@@ -133,29 +138,39 @@ export default function AddressPick() {
   );
 
   const handlePredictionSelect = useCallback(
-    (prediction: google.maps.places.AutocompletePrediction) => {
-      const g = mapsRef.current;
-      const service = placesServiceRef.current;
-      if (!g || !service) return;
-      const request: google.maps.places.PlaceDetailsRequest = {
-        placeId: prediction.place_id,
-        fields: ['formatted_address', 'geometry'],
-        sessionToken: sessionTokenRef.current || undefined,
-      };
-      service.getDetails(request, async (place, status) => {
-        if (status !== g.maps.places.PlacesServiceStatus.OK || !place?.geometry?.location) {
-          return;
-        }
-        const np = {
-          lat: place.geometry.location.lat(),
-          lng: place.geometry.location.lng(),
-        };
-        setInput(place.formatted_address || prediction.description || '');
-        await movePin(np, false);
+    async (entry: SuggestionEntry) => {
+      const lib = placesLibRef.current;
+      if (!lib) return;
+      const { Place, AutocompleteSessionToken } = lib;
+      if (!Place) return;
+      const placeId = entry.prediction.placeId;
+      if (!placeId) return;
+      try {
+        const place = new Place({ id: placeId });
+        const { place: fetched } = await place.fetchFields({
+          fields: ['location', 'formattedAddress', 'displayName'],
+        });
+        const loc = fetched.location
+          ? fetched.location.toJSON
+            ? fetched.location.toJSON()
+            : { lat: fetched.location.lat(), lng: fetched.location.lng() }
+          : null;
+        if (!loc) return;
+        const label =
+          fetched.formattedAddress ||
+          entry.prediction.text?.text ||
+          entry.prediction.mainText?.text ||
+          '';
+        setInput(label);
+        await movePin({ lat: loc.lat, lng: loc.lng }, false);
         setPredictions([]);
         setShowPredictions(false);
-        sessionTokenRef.current = new g.maps.places.AutocompleteSessionToken();
-      });
+        if (AutocompleteSessionToken) {
+          sessionTokenRef.current = new AutocompleteSessionToken();
+        }
+      } catch (err) {
+        console.warn('[places] fetchFields failed', err);
+      }
     },
     [movePin]
   );
@@ -172,12 +187,15 @@ export default function AddressPick() {
       if (!mounted || !mapEl.current) return;
 
       const center: Coords = coords ?? { lat: 28.6139, lng: 77.209 };
-      const map = new g.maps.Map(mapEl.current, {
+      const mapOptions: google.maps.MapOptions = {
         center,
         zoom: coords ? 16 : 12,
         disableDefaultUI: true,
         clickableIcons: false,
-      });
+      };
+      const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+      if (mapId) (mapOptions as any).mapId = mapId;
+      const map = new g.maps.Map(mapEl.current, mapOptions);
       mapRef.current = map;
 
       const marker = new g.maps.marker.AdvancedMarkerElement({
@@ -188,9 +206,12 @@ export default function AddressPick() {
       markerRef.current = marker;
 
       geocoderRef.current = new g.maps.Geocoder();
-      autocompleteServiceRef.current = new g.maps.places.AutocompleteService();
-      placesServiceRef.current = new g.maps.places.PlacesService(map);
-      sessionTokenRef.current = new g.maps.places.AutocompleteSessionToken();
+      const placesLib = (await g.maps.importLibrary('places')) as google.maps.PlacesLibrary;
+      placesLibRef.current = placesLib;
+      const { AutocompleteSessionToken } = placesLib;
+      if (AutocompleteSessionToken) {
+        sessionTokenRef.current = new AutocompleteSessionToken();
+      }
 
       dragEndListener = marker.addListener('dragend', async (event: google.maps.MapMouseEvent) => {
         const pos = event.latLng?.toJSON();
@@ -225,10 +246,9 @@ export default function AddressPick() {
       dragEndListener?.remove();
       markerRef.current = null;
       mapRef.current = null;
-      autocompleteServiceRef.current = null;
-      placesServiceRef.current = null;
       sessionTokenRef.current = null;
       mapsRef.current = null;
+      placesLibRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // init once
@@ -330,22 +350,27 @@ export default function AddressPick() {
           />
           {showPredictions && predictions.length > 0 && (
             <div className="absolute z-20 mt-1 w-full rounded-xl border border-black/10 bg-white shadow-lg">
-              {predictions.map((pred) => (
-                <button
-                  key={pred.place_id}
-                  type="button"
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-black/5"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handlePredictionSelect(pred)}
-                >
-                  {pred.structured_formatting?.main_text || pred.description}
-                  {pred.structured_formatting?.secondary_text && (
-                    <span className="block text-xs text-black/60">
-                      {pred.structured_formatting.secondary_text}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {predictions.map((entry) => {
+                const primary =
+                  entry.prediction.mainText?.text ||
+                  entry.prediction.text?.text ||
+                  '';
+                const secondary = entry.prediction.secondaryText?.text || '';
+                return (
+                  <button
+                    key={entry.prediction.placeId}
+                    type="button"
+                    className="w-full text-left px-4 py-2 text-sm hover:bg-black/5"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handlePredictionSelect(entry)}
+                  >
+                    {primary || 'Unknown place'}
+                    {secondary && (
+                      <span className="block text-xs text-black/60">{secondary}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
