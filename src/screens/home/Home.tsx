@@ -273,7 +273,25 @@ export default function Home() {
     ],
     []
   );
-  useEffect(() => {
+useEffect(() => {
+  const added: HTMLLinkElement[] = [];
+  HERO_PRELOADS.forEach((href) => {
+    if (!href) return;
+    const exists = Array.from(document.querySelectorAll('link[rel="preload"]')).some((link) => link.getAttribute('href') === href);
+    if (exists) return;
+    const linkEl = document.createElement('link');
+    linkEl.rel = 'preload';
+    linkEl.as = 'image';
+    linkEl.href = href;
+    document.head.appendChild(linkEl);
+    added.push(linkEl);
+  });
+  return () => {
+    added.forEach((node) => node.remove());
+  };
+}, []);
+
+useEffect(() => {
     const refresh = () => setProfile(getActiveProfile());
     window.addEventListener('storage', refresh);
     window.addEventListener('bw:profile:update' as any, refresh as any);
@@ -481,6 +499,35 @@ export default function Home() {
   const deferredFilters = useDeferredValue(filters);
   const deferredItemsMap = useDeferredValue(itemsMap);
   const deferredLocationKey = useDeferredValue(locationKey);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    let idleHandle: number | null = null;
+    const mark = () => setHydrated(true);
+    if ('requestIdleCallback' in window) {
+      idleHandle = (window as any).requestIdleCallback(
+        () => {
+          idleHandle = null;
+          mark();
+        },
+        { timeout: 2000 }
+      );
+    } else {
+      idleHandle = window.setTimeout(() => {
+        idleHandle = null;
+        mark();
+      }, 1500);
+    }
+    return () => {
+      if (idleHandle != null) {
+        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+          (window as any).cancelIdleCallback(idleHandle);
+        } else {
+          window.clearTimeout(idleHandle);
+        }
+      }
+    };
+  }, []);
 
   /* ----- listing ----- */
   const visibleDishes = useMemo(() => {
@@ -593,7 +640,7 @@ export default function Home() {
 
         {/* Dish grid */}
         <section id="home-dish-grid" className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleDishes.map((d, idx) => {
+          {(hydrated ? visibleDishes : visibleDishes.slice(0, 6)).map((d, idx) => {
             const id = String(d.id);
             const qty = qtyOf(id);
             const selected = selectedId === id;
@@ -612,6 +659,9 @@ export default function Home() {
             );
           })}
         </section>
+        {!hydrated && visibleDishes.length > 6 && (
+          <p className="mt-2 text-xs text-white/60">Loading more dishes…</p>
+        )}
 
         {/* Bottom bar */}
         {count > 0 && (

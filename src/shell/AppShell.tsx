@@ -1,7 +1,6 @@
 // src/shell/AppShell.tsx
 import React, { Suspense, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { getAuth, signOut } from 'firebase/auth';
 import ToastHost from '../components/ToastHost';
 import RewardHost from '../components/RewardHost';
 import ConfettiBurst from '../components/ConfettiBurst';
@@ -13,6 +12,11 @@ const lazyCloud = () => import('../lib/cloudProfile');
 const lazyTokens = () => import('../lib/tokens');
 const lazyNotify = () => import('../lib/notify');
 const lazyReturn = () => import('../lib/orderReturn');
+let authMod: Promise<typeof import('firebase/auth')> | null = null;
+const loadAuth = () => {
+  if (!authMod) authMod = import('firebase/auth');
+  return authMod;
+};
 const ReturnBanner = React.lazy(() => import('../components/ReturnBanner'));
 const InstallBanner = React.lazy(() => import('../components/InstallBanner'));
 
@@ -89,12 +93,14 @@ export default function AppShell() {
   useEffect(() => {
   const run = async () => {
     try {
+      const { getAuth } = await loadAuth();
       const authed = !!getAuth().currentUser;
       if (authed && hasActiveSession() && getActivePhone()) {
         const cloud = await lazyCloud();
         await cloud.hydrateActiveFromCloud();
         await cloud.pushActiveToCloud();
-        await syncTokensFromCloud();
+        const tokens = await lazyTokens();
+        await tokens.syncTokensFromCloud();
       }
     } catch {}
   };
@@ -169,8 +175,9 @@ export default function AppShell() {
     const run = async () => {
       try {
         if (hasActiveSession() && getActivePhone()) {
-          await hydrateActiveFromCloud();
-          await pushActiveToCloud();
+          const cloud = await lazyCloud();
+          await cloud.hydrateActiveFromCloud();
+          await cloud.pushActiveToCloud();
         }
       } catch {}
     };
@@ -181,7 +188,6 @@ export default function AppShell() {
 
   /* Idle logout */
   useEffect(() => {
-    const auth = getAuth();
     const inAuthContext = () => {
       const p = location.pathname;
       return p.startsWith('/onboarding') || p.startsWith('/auth') || p === '/unlock';
@@ -209,6 +215,7 @@ export default function AppShell() {
 
     // 2. hard sign out of Firebase so tokens are dead
     try {
+      const { getAuth, signOut } = await loadAuth();
       await signOut(getAuth());
     } catch {
       // ignore network / already-signed-out errors
