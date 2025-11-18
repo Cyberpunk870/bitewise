@@ -2,17 +2,16 @@
 import React, {
   Suspense,
   useCallback,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
-  memo,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../store/cart';
 import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
-import { getDishImage, placeholderDishUrl, getPictureSources } from '../../lib/images';
+import { getDishImage } from '../../lib/images';
+import type { FilterState, TabKey } from './types';
 import { ensureActiveProfile, getActiveProfile } from '../../lib/profileStore';
 import {
   haversineMeters,
@@ -26,6 +25,7 @@ import { emit } from '../../lib/events';
 import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressBook'; // ← NEW
 const AppHeader = React.lazy(() => import('../../components/AppHeader'));
 const FirstTimeGuide = React.lazy(() => import('../../components/FirstTimeGuide'));
+const DishGrid = React.lazy(() => import('./HomeDishGrid'));
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
@@ -44,52 +44,7 @@ function isPromptSuppressed() {
 }
 function clearPromptSuppress() { try { sessionStorage.removeItem(SUPPRESS_KEY); } catch {} }
 
-/* ----- tiny stars ----- */
-function Star({ filled }: { filled: boolean }) {
-  return (
-    <svg viewBox="0 0 20 20" className="h-[14px] w-[14px] inline-block align-[-1px]">
-      <path
-        d="M10,2 11.7,7 16,7.4 14.3,10.3 13.6,15.5 10,16.5 5.7,13 6.6,8.4 7.7,7.16"
-        fill={filled ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth="1"
-      />
-    </svg>
-  );
-}
-function StarHalf() {
-  return (
-    <svg viewBox="0 0 20 20" className="h-[14px] w-[14px] inline-block align-[-1px]">
-      <linearGradient id="halfFill" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="50%" stopColor="currentColor" />
-        <stop offset="50%" stopColor="transparent" />
-      </linearGradient>
-      <path
-        d="M10,2 11.7,7 16,7.4 14.3,10.3 13.6,15.5 10,16.5 5.7,13 6.6,8.4 7.7,7.16"
-        fill="url(#halfFill)"
-        stroke="currentColor"
-        strokeWidth="1"
-      />
-    </svg>
-  );
-}
-function Stars({ value = 4.2 }: { value?: number }) {
-  const v = Math.max(0, Math.min(5, value));
-  const full = Math.floor(v);
-  const half = v - full > 0.5 ? 1 : 0;
-  const empty = 5 - full - half;
-  return (
-    <>
-      {Array.from({ length: full }).map((_, i) => (<Star key={`s${i}`} filled />))}
-      {half ? <StarHalf key="half" /> : null}
-      {Array.from({ length: empty }).map((_, i) => (<Star key={`e${i}`} filled={false} />))}
-    </>
-  );
-}
-
 /* ----- types ----- */
-type TabKey = 'all' | 'popular' | 'frequent' | 'value';
-type DishVM = { id: string; name: string; cuisine?: string; rating?: number; image: string };
 
 /* ----- memoised card ----- */
 const DishCard = memo(function DishCard({
@@ -213,8 +168,7 @@ export default function Home() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [query, setQuery] = useState('');
-  const [filters, setFilters] =
-    useState<{ priceMax?: number; ratingMin?: number; distanceMax?: number } | null>(null);
+  const [filters, setFilters] = useState<FilterState>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLocModalOpen, setLocModalOpen] = useState(false);
   const [showGuide, setShowGuide] = useState<boolean>(() => {
@@ -464,84 +418,6 @@ export default function Home() {
     };
   }, [locPerm, maybePromptLabel]);
 
-  const deferredQuery = useDeferredValue(query);
-  const deferredFilters = useDeferredValue(filters);
-  const deferredItemsMap = useDeferredValue(itemsMap);
-  const deferredLocationKey = useDeferredValue(locationKey);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    let idleHandle: number | null = null;
-    const mark = () => setHydrated(true);
-    if ('requestIdleCallback' in window) {
-      idleHandle = (window as any).requestIdleCallback(
-        () => {
-          idleHandle = null;
-          mark();
-        },
-        { timeout: 2000 }
-      );
-    } else {
-      idleHandle = window.setTimeout(() => {
-        idleHandle = null;
-        mark();
-      }, 1500);
-    }
-    return () => {
-      if (idleHandle != null) {
-        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
-          (window as any).cancelIdleCallback(idleHandle);
-        } else {
-          window.clearTimeout(idleHandle);
-        }
-      }
-    };
-  }, []);
-
-  /* ----- listing ----- */
-  const visibleDishes = useMemo(() => {
-    let list = DISH_CATALOG.slice(0);
-    switch (activeTab) {
-      case 'popular':
-        list = list.filter((d: any) => d.popular === true || (d.tags || []).includes('popular'));
-        break;
-      case 'frequent':
-        list = list.filter((_: any, i: number) => i % 2 === 0);
-        break;
-      case 'value':
-        list = list.filter((d: any) => typeof d.price === 'number' && d.price < 200);
-        break;
-      default:
-        break;
-    }
-    if (deferredFilters) {
-      const { priceMax, ratingMin, distanceMax } = deferredFilters;
-      list = list.filter((d: any) => {
-        const price = typeof d.price === 'number' ? d.price : undefined;
-        const distance = (d as any).distance as number | undefined;
-        const rating = (d as any).rating as number | undefined;
-        const okP = typeof priceMax === 'number' ? (price ?? Infinity) <= priceMax : true;
-        const okR = typeof ratingMin === 'number' ? (rating ?? -Infinity) >= ratingMin : true;
-        const okD = typeof distanceMax === 'number' ? (distance ?? Infinity) <= distanceMax : true;
-        return okP && okR && okD;
-      });
-    }
-    if (deferredQuery.trim()) {
-      const q = deferredQuery.trim().toLowerCase();
-      list = list.filter((d: any) => d.name.toLowerCase().includes(q));
-    }
-    return (list as any[]).map((d: any) => ({
-      id: String(d.id),
-      name: d.name,
-      cuisine: d.cuisine,
-      rating: d.rating,
-      image: getDishImage(d.name, d.imageUrl),
-    })) as DishVM[];
-  }, [activeTab, deferredQuery, deferredFilters, deferredLocationKey, deferredItemsMap]);
-
-  /* ----- helpers ----- */
-  const qtyOf = (id: string | number) => (itemsMap as any)?.[String(id)]?.qty ?? 0;
-
   // 🚦 “Update address” → seed onboarding and suppress prompts while we travel there
   async function onLocationChanged() {
     const livePos = live.current;
@@ -608,51 +484,46 @@ export default function Home() {
         </div>
 
         {/* Dish grid */}
-        <section id="home-dish-grid" className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(hydrated ? visibleDishes : visibleDishes.slice(0, 6)).map((d, idx) => {
-            const id = String(d.id);
-            const qty = qtyOf(id);
-            const selected = selectedId === id;
-            return (
-              <DishCard
-                key={id}
-                d={d}
-                qty={qty}
-                selected={selected}
-                priority={idx < 3}
-                onSelect={() => onDishSelect(id)}
-                onInc={() => addAndTrack({ id, name: d.name })}
-                onDec={() => dec(id)}
-                onAddFirst={() => addAndTrack({ id, name: d.name })}
-              />
-            );
-          })}
-        </section>
-        {!hydrated && visibleDishes.length > 6 && (
-          <p className="mt-2 text-xs text-white/60">Loading more dishes…</p>
-        )}
+        <Suspense
+          fallback={
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="h-[320px] rounded-2xl border border-white/5 bg-white/5 animate-pulse"
+                />
+              ))}
+            </div>
+          }
+        >
+          <DishGrid
+            activeTab={activeTab}
+            query={query}
+            filters={filters}
+            locationKey={locationKey}
+            itemsMap={itemsMap}
+            selectedId={selectedId}
+            onSelect={onDishSelect}
+            onAdd={addAndTrack}
+            onDec={(id) => dec(id)}
+          />
+        </Suspense>
 
         {/* Bottom bar */}
         {count > 0 && (
           <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30">
             <div className="inline-flex items-center gap-2 rounded-full border bg-white/95 backdrop-blur px-2 py-1 shadow-lg">
               <div className="flex -space-x-2">
-                {recentThumbs.map((t) => {
-                  const thumbSources = getPictureSources(t.img);
-                  return (
-                    <picture key={t.id} className="w-7 h-7 rounded-full overflow-hidden border bg-white">
-                      {thumbSources.avif && <source srcSet={thumbSources.avif} type="image/avif" />}
-                      {thumbSources.webp && <source srcSet={thumbSources.webp} type="image/webp" />}
-                      <img
-                        src={thumbSources.fallback}
-                        alt={t.name}
-                        className="w-7 h-7 object-cover"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                    </picture>
-                  );
-                })}
+                {recentThumbs.map((t) => (
+                  <img
+                    key={t.id}
+                    src={t.img}
+                    alt={t.name}
+                    className="w-7 h-7 rounded-full object-cover border bg-white"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ))}
               </div>
               <button
                 id="home-compare-cta"
