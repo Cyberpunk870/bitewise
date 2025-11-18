@@ -11,6 +11,7 @@ import { manualLogout } from '../lib/session'; // ✅ NEW: single source of trut
 import BitewiseLogo from './BitewiseLogo';
 import type { FuzzyDishMatch } from '../lib/fuzzyDish';
 import type { BotMessage as PanelMessage } from './YummiBotPanel';
+const HeaderActions = React.lazy(() => import('./HeaderActions'));
 
 /* icons */
 function MicIcon(props: React.SVGProps<SVGSVGElement>) {
