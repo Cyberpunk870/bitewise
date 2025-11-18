@@ -29,8 +29,9 @@ export default function AddressPick() {
   // Detect if this address-pick is a “lite” update (from Settings or live updater)
   const params = new URLSearchParams(location.search);
   const fromSettings = params.get('from') === 'settings';
-  const fromLiveUpdate = !!sessionStorage.getItem('bw.pending.liveAddress');
-  const isLiteAddressUpdate = fromSettings || fromLiveUpdate;
+  const liveFlowFlag = sessionStorage.getItem('bw.liveAddress.flow');
+  const fromLiveUpdate = liveFlowFlag === 'live';
+  const isLiteAddressUpdate = fromSettings && !fromLiveUpdate;
 
   // Seed from pending live address if present
   let seedLine = storedLine ?? '';
@@ -315,11 +316,18 @@ export default function AddressPick() {
           });
         }
       } catch {} // non-blocking
+      try { sessionStorage.removeItem('bw.liveAddress.flow'); } catch {}
       nav('/home', { replace: true });
       return;
     }
 
-    // Otherwise continue to the label step
+    if (fromLiveUpdate) {
+      try { sessionStorage.setItem('bw.liveAddress.flow', 'label'); } catch {}
+      nav('/onboarding/address/label', { replace: true });
+      return;
+    }
+
+    // Otherwise continue to the standard label step
     nav('/onboarding/address/label', { replace: true });
   };
 

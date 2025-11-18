@@ -13,6 +13,8 @@ const LABEL_SUGGESTIONS = ['Home', 'Work', 'PG', 'Parents', 'Friend', 'Gym', 'Ot
 export default function AddressLabel() {
   const nav = useNavigate();
   const ob: any = useOnboarding();
+  const liveFlowFlag = typeof window !== 'undefined' ? sessionStorage.getItem('bw.liveAddress.flow') : null;
+  const fromLiveUpdate = liveFlowFlag === 'label';
 
   // Optional store step handling
   useEffect(() => {
@@ -85,7 +87,15 @@ export default function AddressLabel() {
       console.warn('⚠️ Failed to upsert onboarding address:', err);
     }
 
+    try { sessionStorage.removeItem('bw.pending.liveAddress'); } catch {}
+
     // 4. continue onboarding flow
+    if (fromLiveUpdate) {
+      try { sessionStorage.removeItem('bw.liveAddress.flow'); } catch {}
+      nav('/home', { replace: true });
+      return;
+    }
+
     nav('/onboarding/perm/location', { replace: true });
   }
 

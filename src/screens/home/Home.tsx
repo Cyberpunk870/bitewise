@@ -334,6 +334,7 @@ export default function Home() {
         'bw.pending.liveAddress',
         JSON.stringify({ lat: livePos.lat, lng: livePos.lng, addressLine: addr, label: label2 })
       );
+      sessionStorage.setItem('bw.liveAddress.flow', 'live');
     } catch {}
     emit('bw:location:changed', { lat: livePos.lat, lng: livePos.lng });
     nav('/onboarding/address/pick', { replace: true });
