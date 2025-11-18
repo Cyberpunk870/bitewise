@@ -225,6 +225,8 @@ app.get("/api/public/check-phone", async (req, res) => {
     ensureAdmin();
     const raw = typeof req.query?.phone === "string" ? req.query.phone : "";
     const phone = raw.replace(/\s+/g, "");
+    const rawMode = typeof req.query?.mode === "string" ? req.query.mode : "";
+    const mode = rawMode === "signup" || rawMode === "login" ? rawMode : null;
     if (!phone) {
       return res.status(400).json({ ok: false, error: "phone required" });
     }
@@ -233,7 +235,26 @@ app.get("/api/public/check-phone", async (req, res) => {
       .where("phone", "==", phone)
       .limit(1)
       .get();
-    return res.json({ ok: true, exists: !snap.empty });
+    const exists = !snap.empty;
+
+    if (mode === "signup" && exists) {
+      return res.status(409).json({
+        ok: false,
+        code: "PHONE_EXISTS",
+        error: "An account with this phone already exists.",
+        exists: true,
+      });
+    }
+    if (mode === "login" && !exists) {
+      return res.status(404).json({
+        ok: false,
+        code: "PHONE_NOT_FOUND",
+        error: "No account found for this phone number.",
+        exists: false,
+      });
+    }
+
+    return res.json({ ok: true, exists });
   } catch (err: any) {
     console.error("[public/check-phone] error", err);
     return res.status(500).json({ ok: false, error: err?.message || "internal error" });

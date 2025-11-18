@@ -141,6 +141,7 @@ export default function AppHeader() {
     };
   }, []);
 
+
   /* profile */
   const [profile, setProfile] = useState(() => getActiveProfile());
   useEffect(() => {
@@ -381,6 +382,14 @@ export default function AppHeader() {
       text: "Hey, I'm YummiBot. Ask me for dishes, cuisines, or what's trending!",
     },
   ]);
+
+  useEffect(() => {
+    const open = () => setBotOpen(true);
+    window.addEventListener('bw:yummibot:open' as any, open as any);
+    return () => {
+      window.removeEventListener('bw:yummibot:open' as any, open as any);
+    };
+  }, []);
 
   const pushBotMessage = (msg: BotMessage) => {
     setBotMessages((prev) => [...prev, msg]);

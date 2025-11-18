@@ -1,12 +1,20 @@
 // src/lib/cloudProfile.ts
 import { getActivePhone, loadProfileByPhone, saveProfile, type Profile } from './profileStore';
 import { getUserProfile, upsertProfile } from './api';
-import { getAuth } from 'firebase/auth';
+import type { User } from 'firebase/auth';
+import { ensureFirebaseBoot } from './firebaseBoot';
 
 const USE_CLOUD = import.meta.env.VITE_USE_FIRESTORE === '1';
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let lastPushedSnapshot = '';
+
+async function getAuthedUser(): Promise<User | null> {
+  const firebase = await ensureFirebaseBoot();
+  const current = firebase.auth.currentUser;
+  if (current) return current;
+  return (await firebase.authReady) ?? null;
+}
 
 function stableSnapshot(p?: Profile | null): string {
   if (!p) return '';
@@ -28,7 +36,8 @@ function stableSnapshot(p?: Profile | null): string {
 export async function pushActiveToCloud(): Promise<void> {
   try {
     if (!USE_CLOUD) return;
-    if (!getAuth().currentUser) return;
+    const user = await getAuthedUser();
+    if (!user) return;
     const phone = getActivePhone();
     if (!phone) return;
     const local = loadProfileByPhone(phone);
@@ -61,7 +70,8 @@ export async function pushActiveToCloud(): Promise<void> {
 export async function hydrateActiveFromCloud(): Promise<boolean> {
   try {
     if (!USE_CLOUD) return false;
-    if (!getAuth().currentUser) return false;
+    const user = await getAuthedUser();
+    if (!user) return false;
     const phone = getActivePhone();
     if (!phone) return false;
     const remote = await getUserProfile();

@@ -75,6 +75,27 @@ export function placeholderDishUrl(): string {
   return '/img/placeholder-dish.jpg';
 }
 
+export type PictureSources = {
+  fallback: string;
+  webp?: string;
+  avif?: string;
+};
+
+/** Build <picture> sources for local dish assets (falls back to single IMG). */
+export function getPictureSources(src?: string | null): PictureSources {
+  const fallback = (src && src.trim()) || placeholderDishUrl();
+  const localMatch = /^\/img\/dishes\/[a-z0-9-]+\.jpg$/i.test(fallback);
+  if (!localMatch) {
+    return { fallback };
+  }
+  const base = fallback.replace(/\.jpg$/i, '');
+  return {
+    fallback,
+    webp: `${base}.webp`,
+    avif: `${base}.avif`,
+  };
+}
+
 /** Optional utility for debugging */
 export function _clearDishImageCache() {
   try {

@@ -12,7 +12,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../store/cart';
 import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
-import { getDishImage, placeholderDishUrl } from '../../lib/images';
+import { getDishImage, placeholderDishUrl, getPictureSources } from '../../lib/images';
 import { ensureActiveProfile, getActiveProfile } from '../../lib/profileStore';
 import {
   haversineMeters,
@@ -26,15 +26,19 @@ import { emit } from '../../lib/events';
 import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressBook'; // ← NEW
 const AppHeader = React.lazy(() => import('../../components/AppHeader'));
 const FirstTimeGuide = React.lazy(() => import('../../components/FirstTimeGuide'));
+const MissionsStrip = React.lazy(() => import('./sections/MissionsStrip'));
+const AnalyticsPeek = React.lazy(() => import('./sections/AnalyticsPeek'));
+const YummiBotTeaser = React.lazy(() => import('./sections/YummiBotTeaser'));
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
-const HERO_PRELOADS = [
-  '/img/dishes/masala-dosa.jpg',
-  '/img/dishes/paneer-butter-masala.jpg',
-  '/img/dishes/chicken-biryani.jpg',
-  '/img/dishes/margherita-pizza.jpg',
+const HERO_BASES = [
+  '/img/dishes/masala-dosa',
+  '/img/dishes/paneer-butter-masala',
+  '/img/dishes/chicken-biryani',
+  '/img/dishes/margherita-pizza',
 ];
+const HERO_PRELOADS = HERO_BASES.flatMap((base) => [`${base}.avif`, `${base}.webp`, `${base}.jpg`]);
 
 /** --- NEW: prompt suppression (prevents loop after “Update address”) --- */
 const SUPPRESS_KEY = 'bw.locationPrompt.suppressUntil';
@@ -117,6 +121,7 @@ const DishCard = memo(function DishCard({
   onSelect: () => void;
   priority?: boolean;
 }) {
+  const sources = getPictureSources(d.image || placeholderDishUrl());
   return (
     <div
       className={[
@@ -130,20 +135,28 @@ const DishCard = memo(function DishCard({
       onClick={onSelect}
     >
       <div className="relative w-full rounded-xl overflow-hidden mb-2 pb-[175%]">
-        <img
-          src={d.image || placeholderDishUrl()}
-          className="absolute inset-0 h-full w-full object-cover object-center"
-          loading={priority ? 'eager' : 'lazy'}
-          fetchPriority={priority ? 'high' : 'auto'}
-          decoding="async"
-          sizes="(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw"
-          onError={(e) => {
-            const el = (e.currentTarget as HTMLImageElement)!;
-            const ph = placeholderDishUrl();
-            if (!el.src.endsWith(ph)) el.src = ph;
-          }}
-          alt={d.name}
-        />
+        <picture className="absolute inset-0 h-full w-full">
+          {sources.avif && (
+            <source srcSet={sources.avif} type="image/avif" />
+          )}
+          {sources.webp && (
+            <source srcSet={sources.webp} type="image/webp" />
+          )}
+          <img
+            src={sources.fallback}
+            className="absolute inset-0 h-full w-full object-cover object-center"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
+            decoding="async"
+            sizes="(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw"
+            onError={(e) => {
+              const el = (e.currentTarget as HTMLImageElement)!;
+              const ph = placeholderDishUrl();
+              if (!el.src.endsWith(ph)) el.src = ph;
+            }}
+            alt={d.name}
+          />
+        </picture>
         {selected && (
           <div className="absolute inset-0 bg-[rgba(4,9,20,0.88)] backdrop-blur-sm flex items-end justify-center p-3 gap-2">
             {qty > 0 ? (
@@ -224,6 +237,7 @@ export default function Home() {
   const [profile, setProfile] = useState(() => getActiveProfile());
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelSuggestion, setLabelSuggestion] = useState<string>('Home');
+  const [showInsights, setShowInsights] = useState(false);
 
   const dismissGuide = useCallback(() => {
     setShowGuide(false);
@@ -301,15 +315,20 @@ useEffect(() => {
     };
   }, []);
 
+  const openLabelPrompt = useCallback((hint?: string) => {
+    setLabelSuggestion(hint || deriveAddressLabel(hint || '') || 'Home');
+    setShowLabelModal(true);
+    try { sessionStorage.removeItem('bw.labelPrompt.skip'); } catch {}
+  }, []);
+
   const maybePromptLabel = useCallback(() => {
     try {
       if (sessionStorage.getItem('bw.labelPrompt.skip') === '1') return;
     } catch {}
     const active = getActiveProfile();
     if (!active?.addressLine || active.addressLabel) return;
-    setLabelSuggestion(deriveAddressLabel(active.addressLine) || 'Home');
-    setShowLabelModal(true);
-  }, []);
+    openLabelPrompt(active.addressLine);
+  }, [openLabelPrompt]);
 
   useEffect(() => {
     if (!profile?.addressLine || profile?.addressLabel) return;
@@ -424,7 +443,7 @@ useEffect(() => {
         live.current = newLive;
         setActLabel(typeof meters === 'number' ? `${meters} m` : 'New position');
         setLocModalOpen(true);
-        maybePromptLabel();
+        openLabelPrompt();
       });
 
       if (res === 'auto-switched') {
@@ -452,14 +471,14 @@ useEffect(() => {
           live.current = coords;
           setActLabel(`${Math.round(meters)} m`);
           setLocModalOpen(true);
-          maybePromptLabel();
+          openLabelPrompt();
         }
       } else {
         // no saved addresses → behave like before
         live.current = coords;
         setActLabel('New position');
         setLocModalOpen(true);
-        maybePromptLabel();
+        openLabelPrompt();
       }
     };
 
@@ -528,6 +547,62 @@ useEffect(() => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (showInsights) return;
+    let fired = false;
+    let idleHandle: number | null = null;
+    let timer: number | null = null;
+
+    const enable = () => {
+      if (fired) return;
+      fired = true;
+      setShowInsights(true);
+    };
+
+    const onPointer = () => enable();
+    const onKey = () => enable();
+    const onScroll = () => enable();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pointerdown', onPointer, { once: true, passive: true });
+      window.addEventListener('keydown', onKey, { once: true });
+      window.addEventListener('scroll', onScroll, { once: true, passive: true });
+    }
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      idleHandle = (window as any).requestIdleCallback(
+        () => {
+          idleHandle = null;
+          enable();
+        },
+        { timeout: 2500 }
+      );
+    } else {
+      timer = window.setTimeout(() => {
+        timer = null;
+        enable();
+      }, 2200);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pointerdown', onPointer);
+        window.removeEventListener('keydown', onKey);
+        window.removeEventListener('scroll', onScroll);
+      }
+      if (idleHandle != null) {
+        if (typeof window !== 'undefined' && 'cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+          (window as any).cancelIdleCallback(idleHandle);
+        } else {
+          window.clearTimeout(idleHandle);
+        }
+      }
+      if (timer != null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [showInsights]);
 
   /* ----- listing ----- */
   const visibleDishes = useMemo(() => {
@@ -614,6 +689,28 @@ useEffect(() => {
           <AppHeader />
         </Suspense>
 
+        {showInsights && (
+          <Suspense
+            fallback={
+              <div className="mt-6 grid gap-4 lg:grid-cols-[2fr_1fr]">
+                <div className="h-40 rounded-3xl bg-white/5 animate-pulse" />
+                <div className="grid gap-4">
+                  <div className="h-32 rounded-3xl bg-white/5 animate-pulse" />
+                  <div className="h-32 rounded-3xl bg-white/5 animate-pulse" />
+                </div>
+              </div>
+            }
+          >
+            <div className="mt-6 grid gap-4 lg:grid-cols-[2fr_1fr]">
+              <MissionsStrip />
+              <div className="grid gap-4">
+                <AnalyticsPeek />
+                <YummiBotTeaser />
+              </div>
+            </div>
+          </Suspense>
+        )}
+
         {/* Tabs */}
         <div className="mt-4 flex gap-2">
           {[
@@ -668,14 +765,22 @@ useEffect(() => {
           <div className="fixed bottom-3 left-1/2 -translate-x-1/2 z-30">
             <div className="inline-flex items-center gap-2 rounded-full border bg-white/95 backdrop-blur px-2 py-1 shadow-lg">
               <div className="flex -space-x-2">
-                {recentThumbs.map((t) => (
-                  <img
-                    key={t.id}
-                    src={t.img}
-                    alt={t.name}
-                    className="w-7 h-7 rounded-full object-cover border bg-white"
-                  />
-                ))}
+                {recentThumbs.map((t) => {
+                  const thumbSources = getPictureSources(t.img);
+                  return (
+                    <picture key={t.id} className="w-7 h-7 rounded-full overflow-hidden border bg-white">
+                      {thumbSources.avif && <source srcSet={thumbSources.avif} type="image/avif" />}
+                      {thumbSources.webp && <source srcSet={thumbSources.webp} type="image/webp" />}
+                      <img
+                        src={thumbSources.fallback}
+                        alt={t.name}
+                        className="w-7 h-7 object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    </picture>
+                  );
+                })}
               </div>
               <button
                 id="home-compare-cta"

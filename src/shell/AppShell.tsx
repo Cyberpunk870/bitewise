@@ -8,6 +8,7 @@ import { MissionStatsProvider } from '../components/StreakBadge';
 import { clearSessionPerms, decidePerm } from '../lib/permPrefs';
 import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
 import { emit, on } from '../lib/events';
+import { ensureFirebaseBoot } from '../lib/firebaseBoot';
 const lazyCloud = () => import('../lib/cloudProfile');
 const lazyTokens = () => import('../lib/tokens');
 const lazyNotify = () => import('../lib/notify');
@@ -62,6 +63,18 @@ export default function AppShell() {
       try { sessionStorage.setItem('bw.lastRoute', path); } catch {}
     }
   }, [location.pathname, location.search]);
+
+  /* Ensure Firebase is warmed up for onboarding/auth routes */
+  useEffect(() => {
+    const path = location.pathname;
+    const needsImmediate =
+      path.startsWith('/onboarding') ||
+      path.startsWith('/auth') ||
+      path === '/unlock';
+    if (needsImmediate || hasActiveSession()) {
+      ensureFirebaseBoot().catch(() => {});
+    }
+  }, [location.pathname]);
 
   /* Redirect on auth change ONLY from Unlock (not during onboarding) */
   useEffect(() => {

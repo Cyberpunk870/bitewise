@@ -36,10 +36,107 @@ export const auth = getAuth(app);
 // Be explicit about persistence (default is usually local; we lock it in)
 setPersistence(auth, browserLocalPersistence).catch(() => {});
 
-// Optional analytics (no-op if unsupported)
-isSupported()
-  .then((ok) => ok && getAnalytics(app))
-  .catch(() => {});
+let analyticsBootPromise: Promise<void> | null = null;
+let analyticsScheduled = false;
+
+async function bootAnalytics() {
+  try {
+    const supported = await isSupported();
+    if (supported) {
+      getAnalytics(app);
+    }
+  } catch {
+    /* ignore analytics init failures */
+  }
+}
+
+export function ensureAnalyticsBoot(): Promise<void> {
+  if (!analyticsBootPromise) {
+    analyticsBootPromise = bootAnalytics();
+  }
+  return analyticsBootPromise;
+}
+
+function scheduleAnalyticsBoot() {
+  if (typeof window === "undefined" || analyticsScheduled) return;
+  analyticsScheduled = true;
+
+  let idleHandle: number | null = null;
+  let timer: number | null = null;
+  const removers: Array<() => void> = [];
+
+  const cleanup = () => {
+    while (removers.length) {
+      try {
+        const fn = removers.pop();
+        fn && fn();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (idleHandle != null) {
+      if ("cancelIdleCallback" in window && typeof (window as any).cancelIdleCallback === "function") {
+        (window as any).cancelIdleCallback(idleHandle);
+      } else {
+        window.clearTimeout(idleHandle);
+      }
+      idleHandle = null;
+    }
+    if (timer != null) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  const trigger = () => {
+    cleanup();
+    if ("requestIdleCallback" in window) {
+      idleHandle = (window as any).requestIdleCallback(
+        () => {
+          idleHandle = null;
+          void ensureAnalyticsBoot();
+        },
+        { timeout: 2500 }
+      );
+    } else {
+      timer = window.setTimeout(() => {
+        timer = null;
+        void ensureAnalyticsBoot();
+      }, 1600);
+    }
+  };
+
+  const add = (
+    name: keyof WindowEventMap,
+    handler: (event: Event) => void,
+    options?: AddEventListenerOptions
+  ) => {
+    window.addEventListener(name, handler as any, options);
+    removers.push(() => window.removeEventListener(name, handler as any, options));
+  };
+
+  const onInteract = () => trigger();
+  add("pointerdown", onInteract, { once: true, passive: true });
+  add("keydown", onInteract, { once: true });
+  add("scroll", onInteract, { once: true, passive: true });
+  add(
+    "visibilitychange",
+    () => {
+      if (document.visibilityState === "visible") {
+        trigger();
+      }
+    },
+    { once: true }
+  );
+
+  timer = window.setTimeout(() => {
+    trigger();
+  }, 5000);
+}
+
+if (typeof window !== "undefined") {
+  scheduleAnalyticsBoot();
+}
 
 // 🔒 Only initialize Firestore plumbing if cloud is enabled.
 //     Use a dynamic import to avoid loading the Firestore SDK at all otherwise.

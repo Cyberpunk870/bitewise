@@ -8,13 +8,19 @@ const API_BASE_RAW = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'ht
 const API_BASE = API_BASE_RAW.endsWith('/') ? API_BASE_RAW.slice(0, -1) : API_BASE_RAW;
 const PUBLIC_BASE = `${API_BASE}/public`;
 
-async function isPhoneTaken(phone: string) {
-  const url = `${PUBLIC_BASE}/check-phone?phone=${encodeURIComponent(phone)}`;
+async function verifyPhone(phone: string, mode: 'signup' | 'login') {
+  const url = `${PUBLIC_BASE}/check-phone?phone=${encodeURIComponent(phone)}&mode=${mode}`;
   const res = await fetch(url, { credentials: 'omit' });
+  let data: any = null;
+  try {
+    data = await res.json();
+  } catch {}
   if (!res.ok) {
-    throw new Error('Unable to verify phone. Please try again.');
+    const err = new Error(data?.error || 'Unable to verify phone. Please try again.');
+    (err as any).code = data?.code;
+    (err as any).exists = data?.exists;
+    throw err;
   }
-  const data = await res.json();
   return Boolean(data?.exists);
 }
 
@@ -52,14 +58,7 @@ export default function Phone() {
 
     setSubmitting(true);
     try {
-      if (mode === 'signup') {
-        const taken = await isPhoneTaken(e164);
-        if (taken) {
-          setErr('An account already exists with this phone number. Please log in.');
-          setShowExists(true);
-          return;
-        }
-      }
+      await verifyPhone(e164, mode);
       // Always proceed to OTP; existence is determined & upserted after verification on backend
       ensureRecaptcha();                 // create/reuse invisible widget (idempotent)
       const result = await sendOtp(e164); // uses the same singleton verifier
@@ -67,7 +66,15 @@ export default function Phone() {
       nav(`/onboarding/auth/otp?mode=${mode}`, { replace: true });
     } catch (error: any) {
       console.error(error);
-      setErr(error?.message || 'Failed to send code. Please try again.');
+      if (mode === 'signup' && error?.code === 'PHONE_EXISTS') {
+        setErr('An account with this number already exists.');
+        setShowExists(true);
+      } else if (mode === 'login' && error?.code === 'PHONE_NOT_FOUND') {
+        setErr('No account found with this number. Try signing up first.');
+      } else {
+        setErr(error?.message || 'Failed to send code. Please try again.');
+      }
+      return;
     } finally {
       setSubmitting(false);
     }
@@ -112,12 +119,21 @@ export default function Phone() {
       {showExists && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4">
           <div className="glass-card w-full max-w-sm p-6 space-y-4 text-white">
-            <h2 className="text-xl font-semibold">Account already exists</h2>
+            <h2 className="text-xl font-semibold">Number already on BiteWise</h2>
             <p className="text-sm text-white/70">
-              This phone number is already linked to a BiteWise account. Please switch to the login
-              option or use a different number.
+              Looks like this phone is already linked to an account. You can continue logging in
+              with it or switch to a different number.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                className="flex-1 rounded-xl border border-white/30 py-2 text-white/80"
+                onClick={() => {
+                  setShowExists(false);
+                  setPhone('');
+                }}
+              >
+                Try different number
+              </button>
               <button
                 className="flex-1 rounded-xl bg-white text-black py-2 font-semibold"
                 onClick={() => {
@@ -125,13 +141,7 @@ export default function Phone() {
                   nav('/onboarding/auth/phone?mode=login', { replace: true });
                 }}
               >
-                Go to Login
-              </button>
-              <button
-                className="flex-1 rounded-xl border border-white/30 py-2 text-white/80"
-                onClick={() => setShowExists(false)}
-              >
-                Use another number
+                Login with this number
               </button>
             </div>
           </div>
