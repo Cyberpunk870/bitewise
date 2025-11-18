@@ -532,9 +532,9 @@ export default function Settings() {
               {addresses.map((a) => (
                 <div
                   key={a.id}
-                  className="rounded-xl border bg-white/80 dark:bg-white/10 p-3 flex items-start justify-between"
+                  className="rounded-xl border bg-white/80 dark:bg-white/10 p-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 w-full">
                     <div className="flex items-center gap-2">
                       <div className="font-medium truncate">{a.label || 'Saved'}</div>
                       {a.active ? (
@@ -543,12 +543,12 @@ export default function Settings() {
                         </span>
                       ) : null}
                     </div>
-                    <div className="text-xs opacity-80 truncate">{a.addressLine}</div>
+                    <div className="text-xs opacity-80 break-words">{a.addressLine}</div>
                     <div className="text-[11px] opacity-60 mt-0.5">
                       {a.lat.toFixed(5)}, {a.lng.toFixed(5)}
                     </div>
                   </div>
-                  <div className="shrink-0 flex items-center gap-2">
+                  <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:justify-end w-full sm:w-auto">
                     <button
                       disabled={addrBusy}
                       onClick={() => renameLabel(a)}

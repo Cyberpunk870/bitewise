@@ -1,7 +1,8 @@
 // src/screens/orders/History.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getOrders } from '../../lib/api'; // <-- backend fetch
+import { on } from '../../lib/events';
 
 type OrderRow = {
   id: string;
@@ -17,32 +18,38 @@ export default function History() {
   const nav = useNavigate();
   const [list, setList] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const resp = await getOrders(); // calls /api/orders with bearer token
-        // backend returns { ok: true, data: OrderEventDoc[] }
-        if (resp && resp.ok && Array.isArray(resp.data)) {
-          if (!alive) return;
-          setList(resp.data as OrderRow[]);
-        } else {
-          if (!alive) return;
-          setList([]);
-        }
-      } catch {
-        if (!alive) return;
-        setList([]);
-      } finally {
-        if (!alive) return;
-        setLoading(false);
-      }
-    })();
     return () => {
-      alive = false;
+      mountedRef.current = false;
     };
   }, []);
+
+  const loadOrders = useCallback(async (opts?: { silent?: boolean }) => {
+    const showSpinner = !opts?.silent;
+    if (showSpinner) setLoading(true);
+    try {
+      const resp = await getOrders();
+      const rows = Array.isArray(resp?.data) ? (resp.data as OrderRow[]) : [];
+      if (mountedRef.current) setList(rows);
+    } catch {
+      if (mountedRef.current) setList([]);
+    } finally {
+      if (mountedRef.current && showSpinner) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  useEffect(() => {
+    const off = on('bw:orders:refresh', () => loadOrders({ silent: true }));
+    return () => {
+      off?.();
+    };
+  }, [loadOrders]);
 
   return (
     <main className="min-h-screen px-4 py-6 text-white">

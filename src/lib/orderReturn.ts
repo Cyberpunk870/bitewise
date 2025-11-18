@@ -167,6 +167,7 @@ export async function confirmOrderPlaced(): Promise<{
     // 3) mark completion so backend can roll up savings, leaderboard, etc.
     if (ctx?.id) {
       await apiMarkCompletion(ctx.id, saved);
+      emit('bw:orders:refresh', null);
       track('order_complete', {
         platform: ctx.platform,
         restaurant: ctx.restaurantName,
