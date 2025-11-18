@@ -164,9 +164,35 @@ export async function confirmOrderPlaced(): Promise<{
       apiAddCoins(award, 'order:return').catch(() => {});
     }
 
-    // 3) mark completion so backend can roll up savings, leaderboard, etc.
-    if (ctx?.id) {
-      await apiMarkCompletion(ctx.id, saved);
+    // 3) ensure we have an outbound id; if missing, recreate it now
+    let outboundId = ctx?.id;
+    if (!outboundId && ctx) {
+      try {
+        const res = await apiMarkOutbound({
+          platform: ctx.platform,
+          partner: ctx.platform,
+          restaurant: ctx.restaurantName,
+          dish_name: ctx.restaurantName,
+          total: ctx.total,
+          otherTotal: ctx.otherTotal ?? ctx.total,
+          delta: ctx.delta ?? 0,
+        });
+        if (res?.id) {
+          outboundId = String(res.id);
+          try {
+            sessionStorage.setItem(
+              KEY,
+              JSON.stringify({ ...ctx, id: outboundId })
+            );
+          } catch {}
+        }
+      } catch {
+        // swallow
+      }
+    }
+
+    if (outboundId) {
+      await apiMarkCompletion(outboundId, saved);
       emit('bw:orders:refresh', null);
       track('order_complete', {
         platform: ctx.platform,

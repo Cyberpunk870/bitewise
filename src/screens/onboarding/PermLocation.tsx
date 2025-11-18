@@ -54,6 +54,10 @@ export default function PermLocation() {
       setDec(decidePerm('location'));
     } catch {
       // user may have denied/cancelled
+      emit('bw:toast', {
+        title: 'Location permission blocked',
+        body: 'Allow location in your browser settings for accurate pricing.',
+      } as any);
     }
   }
 

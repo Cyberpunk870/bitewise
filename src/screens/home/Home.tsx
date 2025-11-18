@@ -510,6 +510,7 @@ export default function Home() {
                 className="rounded-xl px-3 py-2 text-sm bg-white text-black font-semibold"
                 onClick={() => {
                   setShowLabelModal(false);
+                  try { sessionStorage.setItem('bw.liveAddress.flow', 'label'); } catch {}
                   nav('/onboarding/address/label');
                 }}
               >
