@@ -5,14 +5,18 @@ import { openNativeApp } from '../lib/deepLinks';
 const DISMISS_KEY = 'bw.install.dismissed';
 
 export default function InstallBanner() {
-  const { supported, promptInstall } = useInstallPrompt();
   const [dismissed, setDismissed] = useState(false);
+  const { supported, promptInstall, resetPrompt } = useInstallPrompt({ enabled: !dismissed });
 
   useEffect(() => {
     try {
       setDismissed(localStorage.getItem(DISMISS_KEY) === '1');
     } catch {}
   }, []);
+
+  useEffect(() => {
+    if (dismissed) resetPrompt();
+  }, [dismissed, resetPrompt]);
 
   if (!supported || dismissed) return null;
 
@@ -21,6 +25,7 @@ export default function InstallBanner() {
     try {
       localStorage.setItem(DISMISS_KEY, '1');
     } catch {}
+    resetPrompt();
   };
 
   return (
