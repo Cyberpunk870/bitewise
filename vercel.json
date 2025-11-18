@@ -19,7 +19,8 @@
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...all].ts" },
-    { "source": "/backend-api/(.*)", "destination": "/api/$1" }
+    { "source": "/backend-api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
