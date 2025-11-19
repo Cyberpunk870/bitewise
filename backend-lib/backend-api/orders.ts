@@ -6,6 +6,7 @@ import { bumpScore } from "./leaderboard";
 import { ensureAchievement } from "./achievements";
 import express from "express";
 import logger from "../lib/logger";
+import { metricsTimer, observeApi } from "../lib/metrics";
 
 const log = logger.child({ module: "orders" });
 
@@ -278,44 +279,72 @@ async function completedCountFor(user_id: string) {
 }
 
 router.post("/outbound", async (req: any, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     const uid = req.user?.uid || req.uid;
-    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    if (!uid) {
+      status = 401;
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
     const result = await markOutbound(req.body, uid);
     return res.json(result);
   } catch (err: any) {
+    const taggedStatus = err?.name === "ZodError" ? 400 : 500;
+    status = taggedStatus;
     log.error({ err }, "POST /orders/outbound failed");
-    const status = err?.name === "ZodError" ? 400 : 500;
-    return res.status(status).json({ ok: false, error: err?.message || "internal error" });
+    return res.status(taggedStatus).json({ ok: false, error: err?.message || "internal error" });
+  } finally {
+    observeApi("orders_outbound", "POST", status, timer);
   }
 });
 
 router.post("/complete", async (req: any, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     const uid = req.user?.uid || req.uid;
-    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    if (!uid) {
+      status = 401;
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
     const id = String(req.body?.id || "").trim();
     const saved = Number(req.body?.saved_amount ?? req.body?.saved);
-    if (!id) return res.status(400).json({ ok: false, error: "id required" });
+    if (!id) {
+      status = 400;
+      return res.status(400).json({ ok: false, error: "id required" });
+    }
     await markCompletion(uid, id, Number.isFinite(saved) ? saved : 0);
     return res.json({ ok: true });
   } catch (err: any) {
-    log.error({ err }, "POST /orders/complete failed");
     const msg = err?.message || "internal error";
-    const status = msg === "forbidden" ? 403 : msg === "order event not found" ? 404 : 500;
-    return res.status(status).json({ ok: false, error: msg });
+    const tagged =
+      msg === "forbidden" ? 403 : msg === "order event not found" ? 404 : err?.name === "ZodError" ? 400 : 500;
+    status = tagged;
+    log.error({ err }, "POST /orders/complete failed");
+    return res.status(tagged).json({ ok: false, error: msg });
+  } finally {
+    observeApi("orders_complete", "POST", status, timer);
   }
 });
 
 router.get("/", async (req: any, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     const uid = req.user?.uid || req.uid;
-    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    if (!uid) {
+      status = 401;
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
     const result = await getOrderEvents(uid);
     res.json(result);
   } catch (err: any) {
+    status = 500;
     log.error({ err }, "GET /orders failed");
     res.status(500).json({ ok: false, error: "internal error" });
+  } finally {
+    observeApi("orders_history", "GET", status, timer);
   }
 });
 export default router;

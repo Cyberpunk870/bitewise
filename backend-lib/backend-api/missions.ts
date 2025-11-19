@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import logger from "../lib/logger";
+import { metricsTimer, observeApi } from "../lib/metrics";
 
 const log = logger.child({ module: "missions" });
 
@@ -96,36 +97,48 @@ export async function saveMissionState(uid: string, raw: unknown): Promise<Missi
 }
 
 router.get("/state", async (req: any, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     const uid = req.user?.uid || req.uid;
     if (!uid) {
+      status = 401;
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
     const state = await fetchMissionState(uid);
     return res.json({ ok: true, state });
   } catch (err: any) {
+    status = 500;
     log.error({ err }, "GET /missions/state failed");
     return res
       .status(500)
       .json({ ok: false, error: err?.message || "internal error" });
+  } finally {
+    observeApi("missions_state_get", "GET", status, timer);
   }
 });
 
 router.post("/state", async (req: any, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     const uid = req.user?.uid || req.uid;
     if (!uid) {
+      status = 401;
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
     const state = await saveMissionState(uid, req.body);
     return res.json({ ok: true, state });
   } catch (err: any) {
-    const status = err?.name === "ZodError" ? 400 : 500;
+    const tagged = err?.name === "ZodError" ? 400 : 500;
+    status = tagged;
     log.error({ err }, "POST /missions/state failed");
-    return res.status(status).json({
+    return res.status(tagged).json({
       ok: false,
       error: err?.message || "internal error",
     });
+  } finally {
+    observeApi("missions_state_post", "POST", status, timer);
   }
 });
 

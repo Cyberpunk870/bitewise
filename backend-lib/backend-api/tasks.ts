@@ -8,6 +8,7 @@ import {
   fetchMissionState,
   saveMissionState,
 } from "./missions";
+import { metricsTimer, observeApi } from "../lib/metrics";
 
 const router = express.Router();
 const log = logger.child({ module: "tasks" });
@@ -50,23 +51,32 @@ function mergeMissionState(
 }
 
 router.get("/", async (req: any, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     const uid = req.user?.uid || req.uid;
     if (!uid) {
+      status = 401;
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
     const state = await fetchMissionState(uid);
     return res.json({ ok: true, tasks: state?.tasks ?? [], state });
   } catch (err: any) {
+    status = 500;
     log.error({ err }, "GET /tasks failed");
     return res.status(500).json({ ok: false, error: "internal error" });
+  } finally {
+    observeApi("tasks_get", "GET", status, timer);
   }
 });
 
 router.post("/", async (req: any, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     const uid = req.user?.uid || req.uid;
     if (!uid) {
+      status = 401;
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
     const data = TaskSyncSchema.parse(req.body || {});
@@ -75,9 +85,12 @@ router.post("/", async (req: any, res) => {
     const state = await saveMissionState(uid, merged);
     return res.json({ ok: true, tasks: state.tasks, state });
   } catch (err: any) {
-    const status = err?.name === "ZodError" ? 400 : 500;
+    const tagged = err?.name === "ZodError" ? 400 : 500;
+    status = tagged;
     log.error({ err }, "POST /tasks failed");
-    return res.status(status).json({ ok: false, error: err?.message || "internal error" });
+    return res.status(tagged).json({ ok: false, error: err?.message || "internal error" });
+  } finally {
+    observeApi("tasks_sync", "POST", status, timer);
   }
 });
 

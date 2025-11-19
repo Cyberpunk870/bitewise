@@ -24,6 +24,7 @@ Copy `.env.example` to `.env.local` for local development. The same keys must be
 | `VITE_FCM_VAPID_KEY` | Web push key from Firebase console (Project Settings → Cloud Messaging). |
 | `CLIENT_ORIGINS` | Comma-separated list of web origins allowed to hit the backend (include localhost, preview, and prod domains). |
 | `FIREBASE_SERVICE_ACCOUNT_PATH` / `FIREBASE_SERVICE_ACCOUNT_JSON` / `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` | Provide one of these so Firebase Admin can mint custom tokens and write to Firestore in production. |
+| `METRICS_TOKEN` | Optional string required in the `x-metrics-key` header when scraping `/metrics`. Leave blank to expose metrics without auth (not recommended in prod). |
 
 ### Vercel env tips
 
@@ -62,3 +63,10 @@ npm run preview        # serves the built frontend locally
 4. Hit `https://<app>/api/ready` after deploy to verify Firebase Admin boots with your service-account.
 
 With the envs configured, the deployed frontend and backend share the same Firebase project, Firestore writes persist, and push notifications can register in production (provided the VAPID key is set).
+
+## Metrics & Alerting
+
+- The backend exposes Prometheus-format metrics at `https://<app>/metrics`. Set `METRICS_TOKEN` and include it in the `x-metrics-key` header when scraping in production.
+- Counters/histograms are emitted for `/api/auth/mintCustomToken`, `/api/orders/*`, `/api/tasks`, and `/api/missions/state` along with default Node metrics. Plug this endpoint into Prometheus/Grafana, Datadog, or any collector that speaks the Prom format.
+- To keep SLOs honest, configure an uptime monitor against `/api/health` and `/metrics`, and alert if latency/error rates spike (e.g., `bitewise_api_duration_ms{route="orders_outbound"}` P95 > 500 ms or `bitewise_api_total{status="5xx"}` increases).
+- Documented remediation tip: if alerts fire, inspect the structured logs (Pino output) for the failing route and redeploy after validation.

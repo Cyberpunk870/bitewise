@@ -27,6 +27,7 @@ import analytics from "./backend-api/analytics";
 import missions from "./backend-api/missions";
 import { verifyAuth } from "./middleware/verifyAuth";
 import logger from "./lib/logger";
+import { metricsContentType, renderMetrics, metricsTimer, observeApi } from "./lib/metrics";
 import { ensureAdmin } from "./lib/firebaseAdmin";
 import webauthnRouter from "./backend-api/webauthn";
 
@@ -51,6 +52,7 @@ const defaultOrigins = [
   "https://bitewise-five.vercel.app",
   "https://bitewise.vercel.app",
 ];
+const metricsKey = process.env.METRICS_TOKEN ? String(process.env.METRICS_TOKEN) : null;
 const envOrigins =
   process.env.CLIENT_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) || [];
 const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
@@ -89,8 +91,23 @@ app.get("/api/ready", (_req, res) => {
   }
 });
 
+app.get("/metrics", async (req, res) => {
+  if (metricsKey && req.headers["x-metrics-key"] !== metricsKey) {
+    return res.status(403).send("forbidden");
+  }
+  try {
+    res.setHeader("Content-Type", metricsContentType());
+    res.send(await renderMetrics());
+  } catch (err: any) {
+    log.error({ err }, "metrics endpoint failed");
+    res.status(500).send("metrics unavailable");
+  }
+});
+
 /* -------------------- Auth Mint Token -------------------- */
 app.post("/api/auth/mintCustomToken", async (req, res) => {
+  const timer = metricsTimer();
+  let status = 200;
   try {
     log.debug("/api/auth/mintCustomToken hit");
     const allow = process.env.ALLOW_CUSTOM_TOKEN_MINT === "1";
@@ -100,6 +117,7 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
       (typeof req.body?.secret === "string" ? req.body.secret : "");
 
     if (!allow || !sharedSecret || providedSecret !== sharedSecret) {
+      status = 403;
       return res.status(403).json({ ok: false, error: "forbidden" });
     }
 
@@ -107,6 +125,7 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
     const phone = String(req.body?.phone || "").trim();
     const uidFromBody = String(req.body?.uid || "").trim();
     if (!phone && !uidFromBody) {
+      status = 400;
       return res.status(400).json({ ok: false, error: "phone or uid required" });
     }
 
@@ -127,6 +146,7 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
     }
 
     if (!targetUid) {
+      status = 404;
       return res.status(404).json({ ok: false, error: "no such user" });
     }
 
@@ -140,8 +160,11 @@ app.post("/api/auth/mintCustomToken", async (req, res) => {
     const token = await adminAuth.createCustomToken(targetUid, phone ? { phone } : undefined);
     return res.json({ ok: true, token });
   } catch (err: any) {
+    status = 500;
     log.error({ err }, "mintCustomToken error");
     return res.status(500).json({ ok: false, error: "internal error" });
+  } finally {
+    observeApi("auth_mint_token", "POST", status, timer);
   }
 });
 
