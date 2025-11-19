@@ -188,22 +188,24 @@ app.get("/api/public/check-phone", async (req, res) => {
   }
 });
 
-/* -------------------- Secure API (requires auth) -------------------- */
-const secureApi = Router();
-secureApi.use(ensureAdminMiddleware);
-secureApi.use(verifyAuth);
+/* -------------------- Secure middlewares -------------------- */
+const secureChain: Array<(req: Request, res: Response, next: NextFunction) => void> = [
+  ensureAdminMiddleware,
+  verifyAuth,
+];
 
-secureApi.use("/user", userRoutes);
-secureApi.use("/orders", orders);
-secureApi.use("/leaderboard", leaderboard);
-secureApi.use("/achievements", achievements);
-secureApi.use("/missions", missions);
-secureApi.use("/tasks", tasks);
-secureApi.use("/ingest", ingest);
-secureApi.use("/analytics", analytics);
+/* -------------------- Secure routes -------------------- */
+app.use("/api/user", ...secureChain, userRoutes);
+app.use("/api/orders", ...secureChain, orders);
+app.use("/api/leaderboard", ...secureChain, leaderboard);
+app.use("/api/achievements", ...secureChain, achievements);
+app.use("/api/missions", ...secureChain, missions);
+app.use("/api/tasks", ...secureChain, tasks);
+app.use("/api/ingest", ...secureChain, ingest);
+app.use("/api/analytics", ...secureChain, analytics);
 
 /* -------------------- Push Registration -------------------- */
-secureApi.post("/push/register", async (req, res) => {
+app.post("/api/push/register", ...secureChain, async (req, res) => {
   try {
     const uid = (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
@@ -255,8 +257,6 @@ secureApi.post("/push/sendTest", async (req, res) => {
     res.status(500).json({ ok: false, error: err?.message || "internal error" });
   }
 });
-
-app.use("/api", secureApi);
 
 log.info("module loaded.");
 export default app;
