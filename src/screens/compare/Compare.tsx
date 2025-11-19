@@ -25,18 +25,23 @@ function Block({
   title,
   children,
   tone = 'default',
+  invert = false,
 }: {
   title: string;
   children: React.ReactNode;
   tone?: 'default' | 'subtle';
+  invert?: boolean;
 }) {
-  const toneClass =
-    tone === 'subtle'
-      ? 'bg-slate-50/90 border-slate-200/70'
-      : 'bg-white border-slate-100/80';
+  const toneClass = tone === 'subtle'
+      ? invert
+        ? 'bg-white/10 border-white/20 text-white'
+        : 'bg-slate-50/90 border-slate-200/70 text-slate-900'
+      : invert
+        ? 'bg-white/15 border-white/30 text-white'
+        : 'bg-white border-slate-100/80 text-slate-900';
   return (
     <div className={`rounded-xl ${toneClass} p-3 shadow-sm`}>
-      <div className="text-sm font-semibold mb-2 text-slate-900">{title}</div>
+      <div className={`text-sm font-semibold mb-2 ${invert ? 'text-white' : 'text-slate-900'}`}>{title}</div>
       <div className="space-y-2">{children}</div>
     </div>
   );
@@ -111,7 +116,9 @@ export default function Compare() {
 
         {/* two columns */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {columns.map((c) => (
+          {columns.map((c) => {
+            const accent = PLATFORM_ACCENTS[c.platform.toLowerCase()] ?? PLATFORM_ACCENTS.default;
+            return (
             <div
               key={c.platform}
               className={[
@@ -122,8 +129,15 @@ export default function Compare() {
               ].join(' ')}
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="text-base font-semibold capitalize">{c.platform}</div>
-                <div className="text-sm opacity-70">{c.etaMins} mins</div>
+                <div className="flex items-center gap-2">
+                  <div className={`text-xs font-semibold px-3 py-1 rounded-full capitalize ${accent.badge}`}>
+                    {c.platform}
+                  </div>
+                  <div className="text-sm opacity-70">{c.etaMins} mins</div>
+                </div>
+                {cheaper === c.platform && (
+                  <span className="text-xs font-semibold text-emerald-500">Best price</span>
+                )}
               </div>
 
               {/* items */}
@@ -175,7 +189,7 @@ export default function Compare() {
               <button
   className={[
     'mt-3 w-full px-4 py-2 rounded-xl text-white',
-    cheaper === c.platform ? 'bg-emerald-600' : 'bg-black',
+    cheaper === c.platform ? 'bg-emerald-600' : accent.button,
   ].join(' ')}
   onClick={async () => {
     emit('bw:compare:done', { platform: c.platform, total: c.total });
@@ -214,3 +228,20 @@ export default function Compare() {
     </main>
   );
 }
+const PLATFORM_ACCENTS: Record<string, { badge: string; button: string; accentText: string }> = {
+  swiggy: {
+    badge: 'bg-[#f97316]/15 text-[#f97316] border border-[#f97316]/30',
+    button: 'bg-[#f97316] text-white',
+    accentText: 'text-[#f97316] border-[#f97316]/30',
+  },
+  zomato: {
+    badge: 'bg-[#ef4444]/15 text-[#ef4444] border border-[#ef4444]/30',
+    button: 'bg-[#ef4444] text-white',
+    accentText: 'text-[#ef4444] border-[#ef4444]/30',
+  },
+  default: {
+    badge: 'bg-slate-100 text-slate-700 border border-slate-200',
+    button: 'bg-black text-white',
+    accentText: 'text-slate-700 border-slate-200',
+  },
+};

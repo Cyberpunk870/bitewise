@@ -13,6 +13,10 @@ const LABEL_SUGGESTIONS = ['Home', 'Work', 'PG', 'Parents', 'Friend', 'Gym', 'Ot
 export default function AddressLabel() {
   const nav = useNavigate();
   const ob: any = useOnboarding();
+  const prefill =
+    typeof window !== 'undefined'
+      ? sessionStorage.getItem('bw.labelPrompt.prefill')
+      : null;
   const liveFlowFlag = typeof window !== 'undefined' ? sessionStorage.getItem('bw.liveAddress.flow') : null;
   const fromLiveUpdate = liveFlowFlag === 'label';
 
@@ -28,17 +32,22 @@ export default function AddressLabel() {
   const lat = ob?.lat ?? null;
   const lng = ob?.lng ?? null;
   const currentLabel = ob?.addressLabel || '';
+  useEffect(() => {
+    return () => {
+      try { sessionStorage.removeItem('bw.labelPrompt.prefill'); } catch {}
+    };
+  }, []);
 
   // Dropdown + optional custom label
-  const [selected, setSelected] = useState(() => {
-    const hit = LABEL_SUGGESTIONS.find(
-      (s) => s.toLowerCase() === (currentLabel || '').toLowerCase()
-    );
-    return hit || 'Other';
-  });
+  const initialLabel = currentLabel || prefill || '';
+  const normalizedInitial = initialLabel.toLowerCase();
+  const matchedPreset =
+    LABEL_SUGGESTIONS.find((s) => s.toLowerCase() === normalizedInitial) ||
+    (initialLabel ? 'Other' : 'Home');
+  const [selected, setSelected] = useState<string>(matchedPreset);
 
   const [customLabel, setCustomLabel] = useState(
-    LABEL_SUGGESTIONS.includes(currentLabel) ? '' : currentLabel
+    matchedPreset === 'Other' ? initialLabel : ''
   );
 
   const effectiveLabel = selected === 'Other' ? customLabel.trim() : selected;

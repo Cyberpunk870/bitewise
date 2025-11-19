@@ -85,6 +85,7 @@ export default function Home() {
   const [profile, setProfile] = useState(() => getActiveProfile());
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelSuggestion, setLabelSuggestion] = useState<string>('Home');
+  const QUICK_LABELS = ['Home', 'Work', 'PG', 'Parents', 'Friend'];
 
   const dismissGuide = useCallback(() => {
     setShowGuide(false);
@@ -496,6 +497,27 @@ export default function Home() {
               Give this address a quick label like “Home” or “Work” so we can switch faster later.
             </p>
             <p className="text-xs text-white/50 mt-2">Suggested: {labelSuggestion}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {QUICK_LABELS.map((lbl) => (
+                <button
+                  key={lbl}
+                  className={[
+                    'px-3 py-1.5 rounded-full text-xs border',
+                    lbl === labelSuggestion ? 'bg-white text-black' : 'border-white/30 text-white/80 hover:bg-white/10',
+                  ].join(' ')}
+                  onClick={() => {
+                    try {
+                      sessionStorage.setItem('bw.labelPrompt.prefill', lbl);
+                      sessionStorage.setItem('bw.liveAddress.flow', 'label');
+                    } catch {}
+                    setShowLabelModal(false);
+                    nav('/onboarding/address/label');
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap gap-2 justify-end mt-4">
               <button
                 className="rounded-xl border border-white/30 px-3 py-2 text-sm text-white/80"
@@ -506,16 +528,19 @@ export default function Home() {
               >
                 Later
               </button>
-              <button
-                className="rounded-xl px-3 py-2 text-sm bg-white text-black font-semibold"
-                onClick={() => {
-                  setShowLabelModal(false);
-                  try { sessionStorage.setItem('bw.liveAddress.flow', 'label'); } catch {}
-                  nav('/onboarding/address/label');
-                }}
-              >
-                Label address
-              </button>
+      <button
+        className="rounded-xl px-3 py-2 text-sm bg-white text-black font-semibold"
+        onClick={() => {
+          setShowLabelModal(false);
+          try {
+            sessionStorage.setItem('bw.liveAddress.flow', 'label');
+            sessionStorage.setItem('bw.labelPrompt.prefill', labelSuggestion || 'Home');
+          } catch {}
+          nav('/onboarding/address/label');
+        }}
+      >
+        Label address
+      </button>
             </div>
           </div>
         </div>
