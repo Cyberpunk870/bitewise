@@ -1,6 +1,10 @@
 // backend-lib/middleware/verifyAuth.ts
 import { Request, Response, NextFunction } from "express";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
+import logger from "../lib/logger";
+import { ensureAdmin } from "../lib/firebaseAdmin";
+
+const log = logger.child({ module: "verifyAuth" });
 
 export async function verifyAuth(req: Request, res: Response, next: NextFunction) {
   try {
@@ -8,11 +12,12 @@ export async function verifyAuth(req: Request, res: Response, next: NextFunction
     const match = authHeader.match(/^Bearer (.+)$/);
 
     if (!match || !match[1]) {
-      console.warn("[verifyAuth] Missing or invalid auth token");
+      log.warn("Missing or invalid auth token");
       return res.status(401).json({ ok: false, error: "missing or invalid auth token" });
     }
 
     const idToken = match[1];
+    ensureAdmin();
     const adminAuth = getAdminAuth();
     const decoded = await adminAuth.verifyIdToken(idToken, true);
 
@@ -25,7 +30,7 @@ export async function verifyAuth(req: Request, res: Response, next: NextFunction
 
     next();
   } catch (err: any) {
-    console.error("[verifyAuth] Auth error:", err?.message || err);
+    log.error({ err }, "Auth error");
     return res.status(401).json({ ok: false, error: "unauthorized" });
   }
 }

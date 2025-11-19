@@ -67,6 +67,17 @@ export async function apiPost(path: string, body: unknown) {
   }).then(handleResponse);
 }
 
+export async function apiDelete(path: string, body?: unknown) {
+  const headers: Record<string, string> = { ...(await authHeader()) };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  return fetch(`${BASE}${path}`, {
+    method: "DELETE",
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: "omit",
+  }).then(handleResponse);
+}
+
 // ------------------------------------------------------------------
 // 🧭 User Profile / Coins
 // ------------------------------------------------------------------
@@ -102,6 +113,30 @@ export function getAchievements() {
 
 export function getTasks() {
   return apiGet(`/tasks`);
+}
+
+export function getMissionState() {
+  return apiGet(`/missions/state`);
+}
+
+export function saveMissionState(payload: {
+  dayKey: string;
+  totalCompleted: number;
+  streak: { current: number; best: number; lastDay: string | null };
+  tasks: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    target: number;
+    reward: number;
+    day: number;
+    progress: number;
+    ready: boolean;
+    done: boolean;
+    dueTs?: number | null;
+  }>;
+}) {
+  return apiPost(`/missions/state`, payload);
 }
 
 // ------------------------------------------------------------------

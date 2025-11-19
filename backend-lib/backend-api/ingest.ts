@@ -1,6 +1,9 @@
 import express, { Request, Response, NextFunction, RequestHandler } from "express";
 import { getFirestore } from "firebase-admin/firestore";
 import { z } from "zod";
+import logger from "../lib/logger";
+
+const log = logger.child({ module: "ingest" });
 
 const router = express.Router();
 
@@ -35,7 +38,7 @@ const ingestHandler: RequestHandler = async (req: Request, res: Response, next: 
     await batch.commit();
     res.json({ ok: true, count: parsed.length });
   } catch (err: any) {
-    console.error("POST /ingest failed", err);
+    log.error({ err }, "POST /ingest failed");
     const status = err?.name === "ZodError" ? 400 : 500;
     if (status === 500) return next(err);
     res.status(status).json({ ok: false, error: err?.message || "internal error" });

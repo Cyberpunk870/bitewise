@@ -2,7 +2,11 @@
 import { emit, on } from './events';
 import { addNotice } from './notifications';
 import { getAuth } from 'firebase/auth';
-import { addCoins as apiAddCoins } from './api';
+import {
+  addCoins as apiAddCoins,
+  getMissionState as apiGetMissionState,
+  saveMissionState as apiSaveMissionState,
+} from './api';
 
 /* -------------------------------------------------------------------------- */
 /*                                Type system                                 */
@@ -49,6 +53,13 @@ const LS_STREAK_CUR = 'bw.missions.streak.current';
 const LS_STREAK_BEST = 'bw.missions.streak.best';
 const LS_STREAK_DAY = 'bw.missions.streak.day';
 const LS_TOTAL_COMPLETED = 'bw.missions.totalCompleted';
+const LS_REMOTE_VERSION = 'bw.missions.remoteVersion';
+
+const USE_CLOUD_MISSIONS = import.meta.env.VITE_USE_FIRESTORE === '1';
+
+let missionHydrating = false;
+let missionPushTimer: ReturnType<typeof setTimeout> | null = null;
+let missionPushPromise: Promise<void> | null = null;
 
 type MissionStreak = { current: number; best: number; lastDay: string | null };
 export type MissionStats = { streak: MissionStreak; totalCompleted: number };
@@ -85,6 +96,124 @@ function setNumber(key: string, value: number) {
   storageSet(key, String(value));
 }
 
+type MissionStateSnapshot = {
+  dayKey: string;
+  totalCompleted: number;
+  streak: MissionStreak;
+  tasks: Task[];
+  version: number;
+};
+
+function getLocalMissionSnapshot(): MissionStateSnapshot {
+  return {
+    dayKey: storageGet(LS_DAYKEY) || new Date().toDateString(),
+    totalCompleted: getNumber(LS_TOTAL_COMPLETED),
+    streak: getMissionStreak(),
+    tasks: getTasks(),
+    version: Number(storageGet(LS_REMOTE_VERSION) || 0),
+  };
+}
+
+function markMissionDirty() {
+  if (!USE_CLOUD_MISSIONS || typeof window === 'undefined' || missionHydrating) return;
+  storageSet(LS_REMOTE_VERSION, String(Date.now()));
+  if (missionPushTimer) return;
+  missionPushTimer = window.setTimeout(() => {
+    missionPushTimer = null;
+    pushMissionStateNow().catch(() => {});
+  }, 1200);
+}
+
+async function pushMissionStateNow() {
+  if (!USE_CLOUD_MISSIONS || typeof window === 'undefined') return;
+  if (missionPushPromise) return missionPushPromise;
+  missionPushPromise = (async () => {
+    const auth = getAuth();
+    if (!auth.currentUser) return;
+    const snapshot = getLocalMissionSnapshot();
+    try {
+      const res = await apiSaveMissionState({
+        dayKey: snapshot.dayKey,
+        totalCompleted: snapshot.totalCompleted,
+        streak: snapshot.streak,
+        tasks: snapshot.tasks.map((task) => ({
+          id: task.id,
+          kind: task.kind,
+          title: task.title,
+          target: task.target,
+          reward: task.reward,
+          day: task.day,
+          progress: task.progress,
+          ready: task.ready,
+          done: task.done,
+          dueTs: typeof task.dueTs === 'number' ? task.dueTs : null,
+        })),
+      });
+      const remoteVersion = Number(res?.state?.version || Date.now());
+      storageSet(LS_REMOTE_VERSION, String(remoteVersion));
+    } catch (err) {
+      console.warn('[missions] push failed', err);
+    }
+  })();
+  await missionPushPromise;
+  missionPushPromise = null;
+}
+
+function applyRemoteMissionState(state: {
+  dayKey: string;
+  totalCompleted: number;
+  streak: MissionStreak;
+  tasks: Task[];
+  version?: number;
+}) {
+  missionHydrating = true;
+  try {
+    storageSet(LS_DAYKEY, state.dayKey || new Date().toDateString());
+    setTasks(state.tasks || [], { skipDirty: true });
+    setNumber(LS_TOTAL_COMPLETED, state.totalCompleted || 0);
+    setNumber(LS_STREAK_CUR, state.streak?.current || 0);
+    setNumber(LS_STREAK_BEST, state.streak?.best || 0);
+    if (state.streak?.lastDay) storageSet(LS_STREAK_DAY, state.streak.lastDay);
+    else storageSet(LS_STREAK_DAY, '');
+  } finally {
+    missionHydrating = false;
+  }
+  storageSet(LS_REMOTE_VERSION, String(state.version || Date.now()));
+  pushMissionStats(state.streak);
+}
+
+export async function syncMissionsWithCloud(): Promise<boolean> {
+  if (!USE_CLOUD_MISSIONS || typeof window === 'undefined') return false;
+  const auth = getAuth();
+  if (!auth.currentUser) return false;
+  try {
+    const res = await apiGetMissionState();
+    const remote = res?.state;
+    const localVersion = Number(storageGet(LS_REMOTE_VERSION) || 0);
+    if (!remote) {
+      if (localVersion > 0 || getTasks().length) {
+        await pushMissionStateNow();
+      }
+      return false;
+    }
+    const remoteVersion = Number(remote.version || 0);
+    if (remoteVersion > localVersion) {
+      applyRemoteMissionState({
+        ...remote,
+        streak: remote.streak || { current: 0, best: 0, lastDay: null },
+        tasks: Array.isArray(remote.tasks) ? remote.tasks : [],
+      });
+      return true;
+    }
+    if (localVersion > remoteVersion) {
+      await pushMissionStateNow();
+    }
+    return false;
+  } catch (err) {
+    console.warn('[missions] sync failed', err);
+    return false;
+  }
+}
 export function getMissionStreak(): MissionStreak {
   const current = getNumber(LS_STREAK_CUR);
   const best = getNumber(LS_STREAK_BEST);
@@ -122,9 +251,10 @@ export function addBites(delta: number) {
 export function getTasks(): Task[] {
   try { return JSON.parse(storageGet(LS_TASKS) || '[]'); } catch { return []; }
 }
-export function setTasks(list: Task[]) {
+export function setTasks(list: Task[], opts?: { skipDirty?: boolean }) {
   storageSet(LS_TASKS, JSON.stringify(list));
   emit('bw:tasks:changed', list);
+  if (!opts?.skipDirty) markMissionDirty();
 }
 
 function daysBetween(a: Date, b: Date) {
@@ -178,6 +308,7 @@ function registerMissionCompletion() {
   const streak: MissionStreak = { current, best, lastDay: todayKey };
   pushMissionStats(streak);
 
+  markMissionDirty();
   return { streak, celebrate: celebrateStreak };
 }
 

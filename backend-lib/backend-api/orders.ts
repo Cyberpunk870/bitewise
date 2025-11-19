@@ -5,6 +5,9 @@ import { randomUUID } from "crypto";
 import { bumpScore } from "./leaderboard";
 import { ensureAchievement } from "./achievements";
 import express from "express";
+import logger from "../lib/logger";
+
+const log = logger.child({ module: "orders" });
 
 /**
  * We accept a flexible payload because frontend can evolve.
@@ -281,7 +284,7 @@ router.post("/outbound", async (req: any, res) => {
     const result = await markOutbound(req.body, uid);
     return res.json(result);
   } catch (err: any) {
-    console.error("POST /orders/outbound failed", err);
+    log.error({ err }, "POST /orders/outbound failed");
     const status = err?.name === "ZodError" ? 400 : 500;
     return res.status(status).json({ ok: false, error: err?.message || "internal error" });
   }
@@ -297,7 +300,7 @@ router.post("/complete", async (req: any, res) => {
     await markCompletion(uid, id, Number.isFinite(saved) ? saved : 0);
     return res.json({ ok: true });
   } catch (err: any) {
-    console.error("POST /orders/complete failed", err);
+    log.error({ err }, "POST /orders/complete failed");
     const msg = err?.message || "internal error";
     const status = msg === "forbidden" ? 403 : msg === "order event not found" ? 404 : 500;
     return res.status(status).json({ ok: false, error: msg });
@@ -311,7 +314,7 @@ router.get("/", async (req: any, res) => {
     const result = await getOrderEvents(uid);
     res.json(result);
   } catch (err: any) {
-    console.error("GET /orders failed", err);
+    log.error({ err }, "GET /orders failed");
     res.status(500).json({ ok: false, error: "internal error" });
   }
 });

@@ -35,5 +35,14 @@ node_modules/dist/build/.env.DS_Store.vercel
 *.p12
 *.pem
 *.key
+*.keystore
+*.apk
+*.aab
+*.idsig
 .vercel/
 .vercel
+android.keystore
+app-release-*.apk
+app-release-*.aab
+
+firebase/service-account.json

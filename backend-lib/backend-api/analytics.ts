@@ -2,6 +2,9 @@
 
 import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
+import logger from "../lib/logger";
+
+const log = logger.child({ module: "analytics" });
 
 const router = Router();
 
@@ -44,7 +47,7 @@ router.get("/summary", async (req, res) => {
       sample: snap.size,
     });
   } catch (err) {
-    console.error("GET /analytics/summary failed", err);
+    log.error({ err }, "GET /analytics/summary failed");
     res.status(500).json({ ok: false, error: "internal error" });
   }
 });

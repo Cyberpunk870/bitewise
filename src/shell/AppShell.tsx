@@ -114,6 +114,14 @@ export default function AppShell() {
         await cloud.pushActiveToCloud();
         const tokens = await lazyTokens();
         await tokens.syncTokensFromCloud();
+        try {
+          const tasksMod = await import('../lib/tasks');
+          if (typeof tasksMod.syncMissionsWithCloud === 'function') {
+            await tasksMod.syncMissionsWithCloud();
+          }
+        } catch (err) {
+          console.warn('[missions] sync skipped', err);
+        }
       }
     } catch {}
   };

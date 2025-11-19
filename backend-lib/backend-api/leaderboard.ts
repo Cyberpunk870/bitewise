@@ -1,6 +1,9 @@
 // bitewise/server/api/leaderboard.ts
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import express from "express";
+import logger from "../lib/logger";
+
+const log = logger.child({ module: "leaderboard" });
 
 const router = express.Router();
 
@@ -78,7 +81,7 @@ router.get("/", async (req, res) => {
     });
     res.json(result);
   } catch (err: any) {
-    console.error("GET /leaderboard failed", err);
+    log.error({ err }, "GET /leaderboard failed");
     res.status(500).json({ ok: false, error: err?.message || "internal error" });
   }
 });

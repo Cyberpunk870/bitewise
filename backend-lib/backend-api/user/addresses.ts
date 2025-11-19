@@ -3,6 +3,9 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { Router } from "express";
+import logger from "../../lib/logger";
+
+const log = logger.child({ module: "user-addresses" });
 
 /**
  * Payload we accept from frontend.
@@ -259,7 +262,7 @@ router.get("/", async (req: any, res) => {
     const result = await getAddresses(uid);
     res.json(result);
   } catch (err: any) {
-    console.error("GET /user/addresses failed:", err);
+    log.error({ err }, "GET /user/addresses failed");
     res.status(500).json({ ok: false, error: "internal error" });
   }
 });
@@ -271,7 +274,7 @@ router.post("/", async (req: any, res) => {
     const result = await saveAddress(uid, req.body);
     res.json(result);
   } catch (err: any) {
-    console.error("POST /user/addresses failed:", err);
+    log.error({ err }, "POST /user/addresses failed");
     const status = err?.name === "ZodError" ? 400 : 500;
     res.status(status).json({ ok: false, error: err?.message || "internal error" });
   }
@@ -289,7 +292,7 @@ router.get("/nearest", async (req: any, res) => {
     const result = await nearestFor(uid, lat, lng);
     res.json({ ok: true, ...result });
   } catch (err: any) {
-    console.error("GET /user/nearest failed:", err);
+    log.error({ err }, "GET /user/nearest failed");
     res.status(500).json({ ok: false, error: "internal error" });
   }
 });

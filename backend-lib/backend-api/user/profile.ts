@@ -2,6 +2,9 @@
 
 import { Router } from "express";
 import { getFirestore } from "firebase-admin/firestore";
+import logger from "../../lib/logger";
+
+const log = logger.child({ module: "user-profile" });
 
 const router = Router();
 
@@ -32,7 +35,7 @@ router.get("/", async (req: any, res) => {
     const result = await getUserProfile(uid);
     return res.json(result);
   } catch (e: any) {
-    console.error("GET /profile failed:", e);
+    log.error({ err: e }, "GET /profile failed");
     return res.status(500).json({ ok: false, error: e?.message || "internal error" });
   }
 });
@@ -47,7 +50,7 @@ router.post("/", async (req: any, res) => {
     const result = await upsertBasicProfile(uid, input);
     return res.json(result);
   } catch (e: any) {
-    console.error("POST /profile failed:", e);
+    log.error({ err: e }, "POST /profile failed");
     const status = typeof e?.status === "number" ? e.status : 500;
     return res.status(status).json({ ok: false, error: e?.message || "internal error" });
   }
@@ -102,7 +105,7 @@ export async function getUserProfile(uid: string): Promise<{ ok: true; profile: 
       };
     });
   } catch (err) {
-    console.warn("[user/profile] achievements query failed", err);
+    log.warn({ err }, "achievements query failed");
   }
 
   let rank: number | null = null;
@@ -125,7 +128,7 @@ export async function getUserProfile(uid: string): Promise<{ ok: true; profile: 
       return false;
     });
   } catch (err) {
-    console.warn("[user/profile] leaderboard query failed", err);
+    log.warn({ err }, "leaderboard query failed");
   }
 
   return {

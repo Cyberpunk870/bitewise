@@ -20,5 +20,8 @@
     "api",
     "src",
     "types"
+  ],
+  "exclude": [
+    "backend-lib/__tests__"
   ]
 }

@@ -2,8 +2,10 @@
 import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import express from "express";
+import logger from "../lib/logger";
 
 const router = express.Router();
+const log = logger.child({ module: "achievements" });
 const AchInput = z.object({
   user_id: z.string().min(1),
   code: z.string().min(1),        // e.g., "first_save", "hundred_club"
@@ -92,4 +94,31 @@ export async function getAchievements(uid?: string) {
   const data = await getAchievementsFor(uid);
   return { ok: true, data };
 }
+
+router.get("/", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const data = await getAchievementsFor(uid);
+    return res.json({ ok: true, data });
+  } catch (err: any) {
+    log.error({ err }, "GET /achievements failed");
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+router.post("/", async (req: any, res) => {
+  try {
+    const uid = req.user?.uid || req.uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const result = await awardAchievement({ ...req.body, user_id: uid });
+    return res.json(result);
+  } catch (err: any) {
+    const status = err?.name === "ZodError" ? 400 : 500;
+    log.error({ err }, "POST /achievements failed");
+    return res
+      .status(status)
+      .json({ ok: false, error: err?.message || "internal error" });
+  }
+});
 export default router;

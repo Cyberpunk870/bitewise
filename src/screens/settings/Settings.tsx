@@ -1,5 +1,5 @@
 // src/screens/settings/Settings.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTheme } from '../../store/theme';
 import { getActiveProfile, setActiveProfileFields } from '../../lib/profileStore';
@@ -13,16 +13,13 @@ import {
 } from '../../lib/permPrefs';
 import { gateLocation, gateMic, gateNotifications } from '../../lib/permGate';
 import { ensureNotifPermissionOrRoute } from '../../lib/notify';
-import { hasLocalPasskey, clearLocalPasskey } from '../../lib/passkeyLocal';
 import { manualLogout } from '../../lib/session';
 import { emit } from '../../lib/events';
 import { toast } from '../../store/toast';
 import { upsertProfile } from '../../lib/api';
-import {
-  getAddresses as apiGetAddresses,
-  addAddress as apiAddAddress,
-} from '../../lib/api';
+import { getAddresses as apiGetAddresses, addAddress as apiAddAddress } from '../../lib/api';
 import { getAuth } from 'firebase/auth';
+import { fetchPasskeys, deletePasskey, type PasskeySummary } from '../../lib/webauthnClient';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Address shape mirrored from backend
@@ -88,6 +85,20 @@ async function upsertAddress(addr: {
 // ─────────────────────────────────────────────────────────────────────────────
 const KEYS: PermKey[] = ['location', 'notifications', 'mic'];
 
+function formatPasskeyTimestamp(ts?: string) {
+  if (!ts) return 'Never used yet';
+  try {
+    return new Date(ts).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return ts;
+  }
+}
+
 export default function Settings() {
   const nav = useNavigate();
   const { dark, toggle: toggleDark } = useTheme();
@@ -116,10 +127,32 @@ export default function Settings() {
   });
 
   // Passkey state
-  const [hasPk, setHasPk] = useState<boolean>(false);
-  useEffect(() => {
-    setHasPk(!!(phone && hasLocalPasskey(phone)));
+  const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const hasPk = passkeys.length > 0;
+
+  const refreshPasskeys = useCallback(async () => {
+    if (!phone) {
+      setPasskeys([]);
+      return;
+    }
+    try {
+      const list = await fetchPasskeys();
+      setPasskeys(list);
+    } catch (err) {
+      console.warn('fetchPasskeys(settings) failed', err);
+      setPasskeys([]);
+    }
   }, [phone]);
+
+  useEffect(() => {
+    refreshPasskeys();
+    const handler = () => refreshPasskeys();
+    window.addEventListener('bw:passkey:set' as any, handler as any);
+    return () => {
+      window.removeEventListener('bw:passkey:set' as any, handler as any);
+    };
+  }, [refreshPasskeys]);
 
   // Keep local radio state in sync if changed elsewhere
   useEffect(() => {
@@ -244,14 +277,18 @@ export default function Settings() {
     }
   };
 
-  const removePasskey = async () => {
-    if (!phone) return;
+  const removePasskey = async (id: string) => {
+    if (!id) return;
+    setPasskeyBusy(true);
     try {
-      clearLocalPasskey(phone);
-      setHasPk(false);
-      toast.success('Passkey removed from this device');
-    } catch {
+      await deletePasskey(id);
+      toast.success('Passkey removed');
+      await refreshPasskeys();
+    } catch (err) {
+      console.warn('removePasskey failed', err);
       toast.error('Could not remove passkey');
+    } finally {
+      setPasskeyBusy(false);
     }
   };
 
@@ -571,33 +608,51 @@ export default function Settings() {
         </section>
 
         {/* Quick Unlock Passkey */}
-        <section className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow text-sm">
-          <div className="flex items-center justify-between">
+        <section className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow text-sm space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-base font-semibold">Quick Unlock Passkey</div>
               <div className="opacity-80">
                 {hasPk
-                  ? 'A device-local passkey is set for quick unlock after idle.'
-                  : 'No passkey set. Add one to unlock quickly after idle.'}
+                  ? 'You have passkeys registered for this account.'
+                  : 'No passkeys yet. Add one to unlock quickly after idle.'}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {hasPk ? (
-                <button
-                  onClick={removePasskey}
-                  className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20"
-                >
-                  Remove
-                </button>
-              ) : null}
-              <button
-                onClick={goSetPasskey}
-                className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20"
-              >
-                {hasPk ? 'Change' : 'Set Passkey'}
-              </button>
-            </div>
+            <button
+              onClick={goSetPasskey}
+              className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20"
+            >
+              {hasPk ? 'Add another' : 'Set Passkey'}
+            </button>
           </div>
+          {hasPk ? (
+            <div className="space-y-2">
+              {passkeys.map((pk) => (
+                <div
+                  key={pk.id}
+                  className="rounded-xl border border-black/10 dark:border-white/10 bg-white/80 dark:bg-white/5 p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="font-medium">{pk.label || pk.deviceType || 'Passkey'}</div>
+                    <div className="text-xs opacity-70">
+                      Last used {formatPasskeyTimestamp(pk.lastUsedAt || pk.createdAt)}
+                    </div>
+                  </div>
+                  <button
+                    disabled={passkeyBusy}
+                    onClick={() => removePasskey(pk.id)}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-black/20 dark:border-white/30 hover:bg-black/5 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-black/20 dark:border-white/20 p-3 text-xs opacity-70">
+              When you register a passkey we’ll show device info here so you can revoke it later.
+            </div>
+          )}
         </section>
 
         {/* Utilities */}
