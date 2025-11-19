@@ -217,7 +217,8 @@ export default function Compare() {
   Order on {c.platform[0].toUpperCase() + c.platform.slice(1)}
 </button>
             </div>
-          ))}
+          );
+          })}
         </div>
 
         <div className="mt-4 text-sm text-white/80 space-y-1">
