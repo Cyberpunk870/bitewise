@@ -31,6 +31,13 @@ export const ACHIEVEMENTS: Achievement[] = [
     unlock: ({ missions }) => missions >= 15,
   },
   {
+    id: 'mission-marathon',
+    title: 'Mission Marathon',
+    hint: 'Complete 45 missions total',
+    icon: '🏅',
+    unlock: ({ missions }) => missions >= 45,
+  },
+  {
     id: 'streak-3',
     title: 'Spark Streak',
     hint: 'Reach a 3-day mission streak',
@@ -43,6 +50,13 @@ export const ACHIEVEMENTS: Achievement[] = [
     hint: 'Maintain a 7-day streak',
     icon: '⚡',
     unlock: ({ streakBest }) => streakBest >= 7,
+  },
+  {
+    id: 'streak-14',
+    title: 'Relay Champion',
+    hint: 'Maintain a 14-day streak',
+    icon: '🏆',
+    unlock: ({ streakBest }) => streakBest >= 14,
   },
   {
     id: 'analyst',

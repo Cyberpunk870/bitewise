@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getTasks, ensureDailyTasks, claimTask, type Task, getMissionStats, type MissionStats } from '../../lib/tasks';
 import { on } from '../../lib/events';
 import StreakBadge from '../../components/StreakBadge';
+import { ACHIEVEMENTS } from '../../data/achievements';
 
 const midnightTs = () => { const d = new Date(); d.setHours(24,0,0,0); return d.getTime(); };
 const fmt = (ms: number) => {
@@ -22,6 +23,7 @@ export default function MissionsScreen() {
     return getTasks();
   });
   const [missionStats, setMissionStats] = useState<MissionStats>(() => getMissionStats());
+  const [showRecap, setShowRecap] = useState(false);
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -45,6 +47,29 @@ export default function MissionsScreen() {
   const until = midnightTs() - Date.now();
   const progressPct = total ? Math.min(100, (completedCount / total) * 100) : 0;
   const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(new Date());
+  const recapKey = `bw.recap.${new Date().toISOString().slice(0, 10)}`;
+  const tokens = Number(localStorage.getItem('bw.tokens') || '0');
+  const compares = Number(localStorage.getItem('bw.stats.compares') || '0');
+  const unlockedAchievements = useMemo(() => {
+    return ACHIEVEMENTS.filter((a) =>
+      a.unlock({
+        tokens,
+        compares,
+        missions: missionStats.totalCompleted,
+        streakCurrent: missionStats.streak.current,
+        streakBest: missionStats.streak.best,
+      })
+    );
+  }, [tokens, compares, missionStats]);
+
+  useEffect(() => {
+    if (allDone && !sessionStorage.getItem(recapKey)) {
+      setShowRecap(true);
+      sessionStorage.setItem(recapKey, '1');
+    }
+  }, [allDone, recapKey]);
+
+  const closeRecap = () => setShowRecap(false);
 
   const onClaim = (t: Task) => {
     if (!t.ready || t.done) return;
@@ -90,9 +115,17 @@ export default function MissionsScreen() {
         </section>
 
         {allDone ? (
-          <div className="glass-card p-5 border border-white/10">
+          <div className="glass-card p-5 border border-white/10 space-y-3">
             <div className="text-lg font-semibold">You crushed today’s missions! 🎉</div>
-            <p className="text-sm text-white/70 mt-1">Come back tomorrow for three fresh missions.</p>
+            <p className="text-sm text-white/70">
+              Keep the streak alive and unlock new badges. Come back tomorrow for fresh quests.
+            </p>
+            <button
+              className="rounded-xl border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
+              onClick={() => setShowRecap(true)}
+            >
+              View today’s recap
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -150,6 +183,64 @@ export default function MissionsScreen() {
           Missions auto-progress as you use BiteWise—search for dishes, compare restaurants, and add to cart to watch them fill up.
         </p>
       </div>
+      {showRecap && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm px-4 py-6 flex items-center justify-center">
+          <div className="glass-card border border-white/15 max-w-lg w-full p-6 space-y-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.4em] text-white/60">Daily recap</p>
+              <h2 className="text-2xl font-semibold mt-1">All missions complete ✅</h2>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-3">
+                <div className="text-xs text-white/60">Streak</div>
+                <div className="text-xl font-bold">{missionStats.streak.current} days</div>
+                <div className="text-[11px] text-white/60">Best {missionStats.streak.best}d</div>
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-3">
+                <div className="text-xs text-white/60">Total missions</div>
+                <div className="text-xl font-bold">{missionStats.totalCompleted}</div>
+                <div className="text-[11px] text-white/60">+{completedCount} today</div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-white/60 mb-2">Badge spotlight</p>
+              <div className="flex gap-3 flex-wrap">
+                {unlockedAchievements.slice(-3).map((a) => (
+                  <div
+                    key={a.id}
+                    className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 flex items-center gap-2 text-sm"
+                  >
+                    <span className="text-lg">{a.icon ?? '🏅'}</span>
+                    <span>{a.title}</span>
+                  </div>
+                ))}
+                {unlockedAchievements.length === 0 && (
+                  <div className="text-xs text-white/60">
+                    Keep playing to unlock your first badge!
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 justify-end">
+              <button
+                className="rounded-xl border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
+                onClick={() => {
+                  closeRecap();
+                  nav('/achievements');
+                }}
+              >
+                View achievements
+              </button>
+              <button
+                className="rounded-xl bg-white text-black px-4 py-2 text-sm font-semibold"
+                onClick={closeRecap}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
