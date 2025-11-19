@@ -4,15 +4,14 @@ const register = new client.Registry();
 
 const shouldCollectDefaults =
   process.env.ENABLE_DEFAULT_METRICS !== "0" && !process.env.VERCEL;
-let metricsInterval: ReturnType<typeof setInterval> | null = null;
 
 if (shouldCollectDefaults) {
-  metricsInterval = client.collectDefaultMetrics({
+  const interval = client.collectDefaultMetrics({
     register,
     prefix: "bitewise_",
   });
-  if (typeof metricsInterval?.unref === "function") {
-    metricsInterval.unref();
+  if (typeof (interval as any)?.unref === "function") {
+    (interval as any).unref();
   }
 }
 
