@@ -5,7 +5,7 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" }); // Vercel ignores .env.local; envs must be set in dashboard
 
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response, NextFunction, Router } from "express";
 import cors from "cors";
 import bodyParser from "body-parser";
 import morgan from "morgan";
@@ -188,22 +188,22 @@ app.get("/api/public/check-phone", async (req, res) => {
   }
 });
 
-/* -------------------- Secure Middleware -------------------- */
-app.use("/api", ensureAdminMiddleware);
-app.use("/api", verifyAuth);
+/* -------------------- Secure API (requires auth) -------------------- */
+const secureApi = Router();
+secureApi.use(ensureAdminMiddleware);
+secureApi.use(verifyAuth);
 
-/* -------------------- Route Mounting -------------------- */
-app.use("/api/user", userRoutes);
-app.use("/api/orders", orders);
-app.use("/api/leaderboard", leaderboard);
-app.use("/api/achievements", achievements);
-app.use("/api/missions", missions);
-app.use("/api/tasks", tasks);
-app.use("/api/ingest", ingest);
-app.use("/api/analytics", analytics);
+secureApi.use("/user", userRoutes);
+secureApi.use("/orders", orders);
+secureApi.use("/leaderboard", leaderboard);
+secureApi.use("/achievements", achievements);
+secureApi.use("/missions", missions);
+secureApi.use("/tasks", tasks);
+secureApi.use("/ingest", ingest);
+secureApi.use("/analytics", analytics);
 
 /* -------------------- Push Registration -------------------- */
-app.post("/api/push/register", async (req, res) => {
+secureApi.post("/push/register", async (req, res) => {
   try {
     const uid = (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
@@ -225,7 +225,7 @@ app.post("/api/push/register", async (req, res) => {
   }
 });
 
-app.post("/api/push/sendTest", async (req, res) => {
+secureApi.post("/push/sendTest", async (req, res) => {
   try {
     const uid = (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
@@ -255,6 +255,8 @@ app.post("/api/push/sendTest", async (req, res) => {
     res.status(500).json({ ok: false, error: err?.message || "internal error" });
   }
 });
+
+app.use("/api", secureApi);
 
 log.info("module loaded.");
 export default app;
