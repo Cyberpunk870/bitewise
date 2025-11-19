@@ -227,7 +227,7 @@ app.post("/api/push/register", ...secureChain, async (req, res) => {
   }
 });
 
-secureApi.post("/push/sendTest", async (req, res) => {
+app.post("/api/push/sendTest", ...secureChain, async (req, res) => {
   try {
     const uid = (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
