@@ -1,6 +1,6 @@
 // src/screens/onboarding/Phone.tsx
 import React, { useMemo, useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ensureRecaptcha, sendOtp, clearRecaptcha } from '../../lib/firebase';
 import { useAuth } from '../../store/auth';
 
@@ -111,6 +111,18 @@ export default function Phone() {
         >
           {submitting ? 'Sending…' : 'Send code'}
         </button>
+
+        <p className="text-xs text-white/60 leading-relaxed">
+          By continuing you agree to BiteWise&apos;s{' '}
+          <Link to="/legal/terms" className="underline text-white">
+            Terms of Service
+          </Link>{' '}
+          and{' '}
+          <Link to="/legal/privacy" className="underline text-white">
+            Privacy Policy
+          </Link>
+          . We only use your phone number to verify your account and keep your profile in sync.
+        </p>
 
         {/* Host for invisible reCAPTCHA (will be created if missing) */}
         <div id="recaptcha-container" />

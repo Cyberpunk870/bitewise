@@ -655,6 +655,30 @@ export default function Settings() {
           )}
         </section>
 
+        {/* Legal */}
+        <section className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow text-sm space-y-2">
+          <div className="flex flex-col gap-1">
+            <div className="text-base font-semibold">Legal</div>
+            <p className="opacity-80">
+              Learn how we protect your data and the rules that govern BiteWise.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              to="/legal/terms"
+              className="flex-1 rounded-xl border border-white/30 px-3 py-2 hover:bg-white/5 text-center"
+            >
+              Terms of Service
+            </Link>
+            <Link
+              to="/legal/privacy"
+              className="flex-1 rounded-xl border border-white/30 px-3 py-2 hover:bg-white/5 text-center"
+            >
+              Privacy Policy
+            </Link>
+          </div>
+        </section>
+
         {/* Utilities */}
         <section className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow text-sm">
           <div className="flex items-center justify-between">

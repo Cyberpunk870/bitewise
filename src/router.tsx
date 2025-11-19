@@ -30,6 +30,8 @@ const History = lazy(() => import('./screens/orders/History'));
 const Settings = lazy(() => import('./screens/settings/Settings'));
 const Achievements = lazy(() => import('./screens/achievements/Achievements'));
 const AdminAnalytics = lazy(() => import('./screens/admin/Analytics'));
+const Terms = lazy(() => import('./screens/legal/Terms'));
+const Privacy = lazy(() => import('./screens/legal/Privacy'));
 
 const SUSPENSE_FALLBACK = (
   <div className="min-h-dvh grid place-items-center text-white/70">
@@ -83,6 +85,8 @@ const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { path: '/', element: withSuspense(<Welcome />) },
+      { path: '/legal/terms', element: withSuspense(<Terms />) },
+      { path: '/legal/privacy', element: withSuspense(<Privacy />) },
 
       // Handy reset route
       { path: '/reset', element: <Reset /> },
