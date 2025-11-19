@@ -25,6 +25,7 @@ Copy `.env.example` to `.env.local` for local development. The same keys must be
 | `CLIENT_ORIGINS` | Comma-separated list of web origins allowed to hit the backend (include localhost, preview, and prod domains). |
 | `FIREBASE_SERVICE_ACCOUNT_PATH` / `FIREBASE_SERVICE_ACCOUNT_JSON` / `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64` | Provide one of these so Firebase Admin can mint custom tokens and write to Firestore in production. |
 | `METRICS_TOKEN` | Optional string required in the `x-metrics-key` header when scraping `/metrics`. Leave blank to expose metrics without auth (not recommended in prod). |
+| `ENABLE_DEFAULT_METRICS` | Set to `0` on serverless platforms like Vercel to skip Node’s default Prometheus metrics (prevents runaway intervals). Defaults to `1` locally. |
 
 ### Vercel env tips
 

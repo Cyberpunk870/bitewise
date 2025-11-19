@@ -1,13 +1,19 @@
 import client from "prom-client";
 
 const register = new client.Registry();
-const metricsInterval = client.collectDefaultMetrics({
-  register,
-  prefix: "bitewise_",
-});
 
-if (typeof (metricsInterval as any)?.unref === "function") {
-  (metricsInterval as any).unref();
+const shouldCollectDefaults =
+  process.env.ENABLE_DEFAULT_METRICS !== "0" && !process.env.VERCEL;
+let metricsInterval: ReturnType<typeof setInterval> | null = null;
+
+if (shouldCollectDefaults) {
+  metricsInterval = client.collectDefaultMetrics({
+    register,
+    prefix: "bitewise_",
+  });
+  if (typeof metricsInterval?.unref === "function") {
+    metricsInterval.unref();
+  }
 }
 
 const apiHistogram = new client.Histogram({
