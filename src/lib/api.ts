@@ -28,13 +28,12 @@ async function waitForFirebaseUser(maxMs = 8000): Promise<User | null> {
   });
 }
 
-// --- Helper to attach Firebase ID token (robust; handles passkey unlock) ---
-async function authHeader(): Promise<Record<string, string>> {
+// --- Helper to attach Firebase ID token (with auto refresh on 401) ---
+async function getBearerToken(forceRefresh = false): Promise<string> {
   let user = getAuth().currentUser;
   if (!user) user = await waitForFirebaseUser(8000);
   if (!user) throw new Error("missing bearer token");
-  const token = await user.getIdToken();
-  return { Authorization: `Bearer ${token}` };
+  return await user.getIdToken(forceRefresh);
 }
 
 // --- Helper for safe response handling ---
@@ -48,34 +47,73 @@ async function handleResponse(res: Response) {
 }
 
 // --- Generic helpers ---
+type RequestInitLite = RequestInit & { body?: string };
+
+async function requestWithAuth(
+  path: string,
+  init: RequestInitLite,
+  opts: { retry?: boolean } = {}
+) {
+  const retry = opts.retry !== false;
+  const url = `${BASE}${path}`;
+
+  const run = async (forceRefresh: boolean) => {
+    const token = await getBearerToken(forceRefresh);
+    const headers = {
+      ...(init.headers || {}),
+      Authorization: `Bearer ${token}`,
+    };
+    return fetch(url, {
+      ...init,
+      headers,
+      credentials: "omit",
+    });
+  };
+
+  let res = await run(false);
+  if (res.status === 401 && retry) {
+    res = await run(true);
+  }
+  return handleResponse(res as unknown as Response);
+}
+
 export async function apiGet(path: string) {
-  const headers = { Accept: "application/json", ...(await authHeader()) };
-  return fetch(`${BASE}${path}`, {
-    method: "GET",
-    headers,
-    credentials: "omit",
-  }).then(handleResponse);
+  return requestWithAuth(
+    path,
+    { method: "GET", headers: { Accept: "application/json" } },
+    { retry: true }
+  );
 }
 
 export async function apiPost(path: string, body: unknown) {
-  const headers = { "Content-Type": "application/json", ...(await authHeader()) };
-  return fetch(`${BASE}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    credentials: "omit",
-  }).then(handleResponse);
+  const payload = JSON.stringify(body);
+  return requestWithAuth(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+    },
+    { retry: true }
+  );
 }
 
 export async function apiDelete(path: string, body?: unknown) {
-  const headers: Record<string, string> = { ...(await authHeader()) };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  return fetch(`${BASE}${path}`, {
-    method: "DELETE",
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    credentials: "omit",
-  }).then(handleResponse);
+  const headers: Record<string, string> = {};
+  let payload: string | undefined = undefined;
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    payload = JSON.stringify(body);
+  }
+  return requestWithAuth(
+    path,
+    {
+      method: "DELETE",
+      headers,
+      body: payload,
+    },
+    { retry: true }
+  );
 }
 
 // ------------------------------------------------------------------
