@@ -61,6 +61,21 @@ const fallbackOrigins = [
 
 const EXPECTED_ORIGINS = Array.from(new Set([...envOrigins, ...fallbackOrigins]));
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label}_timeout`)), ms);
+    promise
+      .then((v) => {
+        clearTimeout(timer);
+        resolve(v);
+      })
+      .catch((e) => {
+        clearTimeout(timer);
+        reject(e);
+      });
+  });
+}
+
 function sanitizePhone(raw: string) {
   return raw.replace(/[^\d+]/g, "");
 }
@@ -160,26 +175,33 @@ function ensureOrigins(): string[] {
 /* -------------------- Authenticated routes (requires Firebase ID token) -------------------- */
 
 router.get("/passkeys", verifyAuth, async (req: Request, res: Response) => {
-  const timeoutMs = 8000;
+  const timeoutMs = 7000;
+  const started = Date.now();
   try {
     const uid = (req as any).user?.uid || (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    log.info({ uid, route: "passkeys", phase: "start" }, "passkeys request");
     ensureAdmin();
-    const passkeys = await Promise.race([
-      getPasskeys(uid),
-      new Promise<Array<StoredPasskey & { id: string }>>((_, rej) =>
-        setTimeout(() => rej(new Error("timeout")), timeoutMs)
-      ),
-    ]);
+    const passkeys = await withTimeout(getPasskeys(uid), timeoutMs, "getPasskeys");
     const sorted = passkeys.sort((a, b) => {
       const aTs = a.last_used_at || a.created_at || "";
       const bTs = b.last_used_at || b.created_at || "";
       return aTs > bTs ? -1 : 1;
     });
+    log.info(
+      { uid, route: "passkeys", count: sorted.length, ms: Date.now() - started },
+      "passkeys ok"
+    );
     return res.json({ ok: true, passkeys: sorted.map(passkeyResponse) });
   } catch (err: any) {
-    log.error({ err }, "GET /passkeys failed");
-    return res.status(500).json({ ok: false, error: err?.message || "internal error" });
+    log.error(
+      { err, route: "passkeys", ms: Date.now() - started },
+      "GET /passkeys failed"
+    );
+    const isTimeout = err?.message?.toString().includes("timeout");
+    return res
+      .status(isTimeout ? 504 : 500)
+      .json({ ok: false, error: err?.message || "internal error" });
   }
 });
 
@@ -200,20 +222,17 @@ router.delete("/passkeys/:id", verifyAuth, async (req: Request, res: Response) =
 });
 
 router.post("/register/options", verifyAuth, async (req: Request, res: Response) => {
-  const timeoutMs = 8000;
+  const timeoutMs = 7000;
+  const started = Date.now();
   try {
     const uid = (req as any).user?.uid || (req as any).uid;
     const userName = (req as any).user?.name || "";
     const phone = (req as any).user?.phone || "";
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
 
+    log.info({ uid, route: "register/options", phase: "start" }, "passkey options request");
     ensureAdmin();
-    const passkeys = await Promise.race([
-      getPasskeys(uid),
-      new Promise<Array<StoredPasskey & { id: string }>>((_, rej) =>
-        setTimeout(() => rej(new Error("timeout")), timeoutMs)
-      ),
-    ]);
+    const passkeys = await withTimeout(getPasskeys(uid), timeoutMs, "getPasskeys");
 
     const options = await generateRegistrationOptions({
       rpName: DEFAULT_RP_NAME,
@@ -231,11 +250,20 @@ router.post("/register/options", verifyAuth, async (req: Request, res: Response)
     });
 
     await setChallenge(uid, "registration", options.challenge);
-
+    log.info(
+      { uid, route: "register/options", ms: Date.now() - started, passkeys: passkeys.length },
+      "registration options ok"
+    );
     return res.json({ ok: true, options });
   } catch (err: any) {
-    log.error({ err }, "register/options failed");
-    return res.status(500).json({ ok: false, error: err?.message || "internal error" });
+    log.error(
+      { err, route: "register/options", ms: Date.now() - started },
+      "register/options failed"
+    );
+    const isTimeout = err?.message?.toString().includes("timeout");
+    return res
+      .status(isTimeout ? 504 : 500)
+      .json({ ok: false, error: err?.message || "internal error" });
   }
 });
 
