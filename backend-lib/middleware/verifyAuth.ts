@@ -20,10 +20,10 @@ export async function verifyAuth(req: Request, res: Response, next: NextFunction
     ensureAdmin();
     const adminAuth = getAdminAuth();
     const timeoutMs = 8000;
-    const decoded = await Promise.race([
+    const decoded = (await Promise.race([
       adminAuth.verifyIdToken(idToken, true),
       new Promise((_res, rej) => setTimeout(() => rej(new Error("verifyIdToken timeout")), timeoutMs)),
-    ]);
+    ])) as import("firebase-admin/auth").DecodedIdToken;
 
     // ✅ Attach user object (not just uid)
     req.user = {
