@@ -104,6 +104,22 @@ app.get("/metrics", async (req, res) => {
   }
 });
 
+app.get("/api/debug/token", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const match = authHeader.match(/^Bearer (.+)$/);
+    if (!match || !match[1]) {
+      return res.status(400).json({ ok: false, error: "no bearer token" });
+    }
+    ensureAdmin();
+    const decoded = await getAdminAuth().verifyIdToken(match[1], true);
+    return res.json({ ok: true, decoded });
+  } catch (err: any) {
+    log.error({ err }, "debug token verification failed");
+    return res.status(401).json({ ok: false, error: err?.message || "verify failed" });
+  }
+});
+
 /* -------------------- Auth Mint Token -------------------- */
 app.post("/api/auth/mintCustomToken", async (req, res) => {
   const timer = metricsTimer();
