@@ -3,7 +3,7 @@
 importScripts('/firebase-messaging-sw.js');
 
 const CACHE_PREFIX = 'bitewise-shell';
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const APP_CACHE = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const APP_SHELL = [
   '/',
