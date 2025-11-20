@@ -39,6 +39,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Always go to network for JS/CSS chunks to avoid stale module errors.
+  if (request.destination === 'script' || request.destination === 'style') {
+    return;
+  }
+
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
