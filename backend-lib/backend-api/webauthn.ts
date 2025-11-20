@@ -181,7 +181,7 @@ router.get("/passkeys", verifyAuth, async (req: Request, res: Response) => {
     const uid = (req as any).user?.uid || (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     log.info({ uid, route: "passkeys", phase: "start" }, "passkeys request");
-    ensureAdmin();
+    await withTimeout(Promise.resolve().then(() => ensureAdmin()), timeoutMs, "ensureAdmin");
     const passkeys = await withTimeout(getPasskeys(uid), timeoutMs, "getPasskeys");
     const sorted = passkeys.sort((a, b) => {
       const aTs = a.last_used_at || a.created_at || "";
@@ -231,7 +231,7 @@ router.post("/register/options", verifyAuth, async (req: Request, res: Response)
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
 
     log.info({ uid, route: "register/options", phase: "start" }, "passkey options request");
-    ensureAdmin();
+    await withTimeout(Promise.resolve().then(() => ensureAdmin()), timeoutMs, "ensureAdmin");
     const passkeys = await withTimeout(getPasskeys(uid), timeoutMs, "getPasskeys");
 
     const options = await generateRegistrationOptions({
