@@ -19,7 +19,11 @@ export async function verifyAuth(req: Request, res: Response, next: NextFunction
     const idToken = match[1];
     ensureAdmin();
     const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifyIdToken(idToken, true);
+    const timeoutMs = 8000;
+    const decoded = await Promise.race([
+      adminAuth.verifyIdToken(idToken, true),
+      new Promise((_res, rej) => setTimeout(() => rej(new Error("verifyIdToken timeout")), timeoutMs)),
+    ]);
 
     // ✅ Attach user object (not just uid)
     req.user = {
@@ -30,7 +34,8 @@ export async function verifyAuth(req: Request, res: Response, next: NextFunction
 
     next();
   } catch (err: any) {
-    log.error({ err }, "Auth error");
-    return res.status(401).json({ ok: false, error: "unauthorized" });
+    const code = err?.code || err?.message || "unauthorized";
+    log.error({ err, code }, "Auth error");
+    return res.status(401).json({ ok: false, error: String(code) });
   }
 }
