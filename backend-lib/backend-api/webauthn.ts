@@ -180,10 +180,6 @@ router.get("/passkeys", verifyAuth, async (req: Request, res: Response) => {
   try {
     const uid = (req as any).user?.uid || (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
-
-    // Temporary probe: short-circuit to validate the route is reachable in prod.
-    // Remove after confirming the function is invoked.
-    return res.json({ ok: true, probe: "passkeys handler reached", uid });
     log.info({ uid, route: "passkeys", phase: "start" }, "passkeys request");
     await withTimeout(Promise.resolve().then(() => ensureAdmin()), timeoutMs, "ensureAdmin");
     const passkeys = await withTimeout(getPasskeys(uid), timeoutMs, "getPasskeys");
