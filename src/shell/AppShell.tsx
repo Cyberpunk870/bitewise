@@ -21,7 +21,8 @@ const loadAuth = () => {
 const ReturnBanner = React.lazy(() => import('../components/ReturnBanner'));
 const InstallBanner = React.lazy(() => import('../components/InstallBanner'));
 
-const IDLE_MS = 60 * 1000;
+// Idle logout threshold (5 minutes)
+const IDLE_MS = 5 * 60 * 1000;
 const FEED_KIND = import.meta.env.VITE_FEED || 'dummy';
 
 export default function AppShell() {
