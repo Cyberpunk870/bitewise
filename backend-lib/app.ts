@@ -112,7 +112,11 @@ app.get("/api/debug/token", async (req, res) => {
       return res.status(400).json({ ok: false, error: "no bearer token" });
     }
     ensureAdmin();
-    const decoded = await getAdminAuth().verifyIdToken(match[1], true);
+    const timeoutMs = 8000;
+    const decoded = await Promise.race([
+      getAdminAuth().verifyIdToken(match[1], true),
+      new Promise((_r, rej) => setTimeout(() => rej(new Error("verifyIdToken timeout")), timeoutMs)),
+    ]);
     return res.json({ ok: true, decoded });
   } catch (err: any) {
     log.error({ err }, "debug token verification failed");
