@@ -39,6 +39,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Never intercept API calls so they always hit the network/back end.
+  if (url.pathname.startsWith('/api/')) return;
+
   // Always go to network for JS/CSS chunks to avoid stale module errors.
   if (request.destination === 'script' || request.destination === 'style') {
     return;
