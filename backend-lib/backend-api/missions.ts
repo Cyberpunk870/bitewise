@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getFirestore } from "firebase-admin/firestore";
 import logger from "../lib/logger";
 import { metricsTimer, observeApi } from "../lib/metrics";
+import { ensureAdmin } from "../lib/firebaseAdmin";
 
 const log = logger.child({ module: "missions" });
 
@@ -105,7 +106,11 @@ router.get("/state", async (req: any, res) => {
       status = 401;
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
-    const state = await fetchMissionState(uid);
+    ensureAdmin();
+    const state = await Promise.race([
+      fetchMissionState(uid),
+      new Promise<null>((_r, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+    ]);
     return res.json({ ok: true, state });
   } catch (err: any) {
     status = 500;
@@ -127,7 +132,11 @@ router.post("/state", async (req: any, res) => {
       status = 401;
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
-    const state = await saveMissionState(uid, req.body);
+    ensureAdmin();
+    const state = await Promise.race([
+      saveMissionState(uid, req.body),
+      new Promise<null>((_r, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+    ]);
     return res.json({ ok: true, state });
   } catch (err: any) {
     const tagged = err?.name === "ZodError" ? 400 : 500;

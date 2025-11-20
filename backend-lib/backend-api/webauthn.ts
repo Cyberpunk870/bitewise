@@ -160,11 +160,17 @@ function ensureOrigins(): string[] {
 /* -------------------- Authenticated routes (requires Firebase ID token) -------------------- */
 
 router.get("/passkeys", verifyAuth, async (req: Request, res: Response) => {
+  const timeoutMs = 8000;
   try {
     const uid = (req as any).user?.uid || (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     ensureAdmin();
-    const passkeys = await getPasskeys(uid);
+    const passkeys = await Promise.race([
+      getPasskeys(uid),
+      new Promise<Array<StoredPasskey & { id: string }>>((_, rej) =>
+        setTimeout(() => rej(new Error("timeout")), timeoutMs)
+      ),
+    ]);
     const sorted = passkeys.sort((a, b) => {
       const aTs = a.last_used_at || a.created_at || "";
       const bTs = b.last_used_at || b.created_at || "";
@@ -173,7 +179,7 @@ router.get("/passkeys", verifyAuth, async (req: Request, res: Response) => {
     return res.json({ ok: true, passkeys: sorted.map(passkeyResponse) });
   } catch (err: any) {
     log.error({ err }, "GET /passkeys failed");
-    return res.status(500).json({ ok: false, error: "internal error" });
+    return res.status(500).json({ ok: false, error: err?.message || "internal error" });
   }
 });
 
@@ -194,6 +200,7 @@ router.delete("/passkeys/:id", verifyAuth, async (req: Request, res: Response) =
 });
 
 router.post("/register/options", verifyAuth, async (req: Request, res: Response) => {
+  const timeoutMs = 8000;
   try {
     const uid = (req as any).user?.uid || (req as any).uid;
     const userName = (req as any).user?.name || "";
@@ -201,7 +208,12 @@ router.post("/register/options", verifyAuth, async (req: Request, res: Response)
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
 
     ensureAdmin();
-    const passkeys = await getPasskeys(uid);
+    const passkeys = await Promise.race([
+      getPasskeys(uid),
+      new Promise<Array<StoredPasskey & { id: string }>>((_, rej) =>
+        setTimeout(() => rej(new Error("timeout")), timeoutMs)
+      ),
+    ]);
 
     const options = await generateRegistrationOptions({
       rpName: DEFAULT_RP_NAME,
