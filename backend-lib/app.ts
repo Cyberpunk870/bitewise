@@ -105,23 +105,9 @@ app.get("/metrics", async (req, res) => {
 });
 
 app.get("/api/debug/token", async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization || "";
-    const match = authHeader.match(/^Bearer (.+)$/);
-    if (!match || !match[1]) {
-      return res.status(400).json({ ok: false, error: "no bearer token" });
-    }
-    ensureAdmin();
-    const timeoutMs = 8000;
-    const decoded = await Promise.race([
-      getAdminAuth().verifyIdToken(match[1], true),
-      new Promise((_r, rej) => setTimeout(() => rej(new Error("verifyIdToken timeout")), timeoutMs)),
-    ]);
-    return res.json({ ok: true, decoded });
-  } catch (err: any) {
-    log.error({ err }, "debug token verification failed");
-    return res.status(401).json({ ok: false, error: err?.message || "verify failed" });
-  }
+  // Temporary probe: short-circuit to verify the route is reachable without hanging.
+  // Remove after debugging the timeout issue in verifyIdToken.
+  return res.json({ ok: true, probe: true });
 });
 
 /* -------------------- Auth Mint Token -------------------- */
