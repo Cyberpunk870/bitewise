@@ -6,6 +6,7 @@ import {
   type PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import { apiDelete, apiGet, apiPost } from "./api";
+import { resolveApiBase } from "./apiBase";
 
 export type PasskeySummary = {
   id: string;
@@ -16,9 +17,7 @@ export type PasskeySummary = {
   lastUsedAt?: string;
 };
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE as string | undefined) ||
-  (import.meta.env.DEV ? "http://localhost:3000/api" : "/api");
+const API_BASE = resolveApiBase();
 
 function publicUrl(path: string) {
   const base = API_BASE.replace(/\/$/, "");

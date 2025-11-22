@@ -39,6 +39,9 @@ const DEFAULT_RP_NAME = process.env.WEBAUTHN_RP_NAME || "BiteWise";
 const DEFAULT_RP_ID =
   process.env.WEBAUTHN_RP_ID ||
   (process.env.VERCEL_URL ? process.env.VERCEL_URL.replace(/^https?:\/\//, "") : "localhost");
+const FIRESTORE_TIMEOUT_MS =
+  Number(process.env.WEBAUTHN_FIRESTORE_TIMEOUT_MS || "") || 10_000;
+const ADMIN_TIMEOUT_MS = Number(process.env.WEBAUTHN_ADMIN_TIMEOUT_MS || "") || 8_000;
 
 const originEnv =
   process.env.WEBAUTHN_ALLOWED_ORIGINS ||
@@ -76,14 +79,25 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+function ensureAdminReady() {
+  return withTimeout(Promise.resolve().then(() => ensureAdmin()), ADMIN_TIMEOUT_MS, "ensureAdmin");
+}
+
+function withDbTimeout<T>(promise: Promise<T>, label: string) {
+  return withTimeout(promise, FIRESTORE_TIMEOUT_MS, label);
+}
+
 function sanitizePhone(raw: string) {
   return raw.replace(/[^\d+]/g, "");
 }
 
 async function ensureUserForPhone(phone: string) {
-  ensureAdmin();
+  await ensureAdminReady();
   const db = getFirestore();
-  const snap = await db.collection("users").where("phone", "==", phone).limit(1).get();
+  const snap = await withDbTimeout(
+    db.collection("users").where("phone", "==", phone).limit(1).get(),
+    "findUserForPhone"
+  );
   if (snap.empty) return null;
   const doc = snap.docs[0];
   return { uid: doc.id, data: doc.data() || {} };
@@ -91,29 +105,35 @@ async function ensureUserForPhone(phone: string) {
 
 async function getPasskeys(uid: string): Promise<Array<StoredPasskey & { id: string }>> {
   const db = getFirestore();
-  const snap = await db.collection("users").doc(uid).collection(PASSKEY_COLLECTION).get();
+  const snap = await withDbTimeout(
+    db.collection("users").doc(uid).collection(PASSKEY_COLLECTION).get(),
+    "getPasskeys"
+  );
   return snap.docs.map((doc) => ({ ...(doc.data() as StoredPasskey), id: doc.id }));
 }
 
 async function setChallenge(uid: string, type: ChallengeType, challenge: string) {
   const db = getFirestore();
   const now = new Date().toISOString();
-  await db
-    .collection("users")
-    .doc(uid)
-    .set(
-      {
-        webauthnChallenge: challenge,
-        webauthnChallengeType: type,
-        webauthnChallengeAt: now,
-      },
-      { merge: true }
-    );
+  await withDbTimeout(
+    db
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          webauthnChallenge: challenge,
+          webauthnChallengeType: type,
+          webauthnChallengeAt: now,
+        },
+        { merge: true }
+      ),
+    "setChallenge"
+  );
 }
 
 async function getChallenge(uid: string) {
   const db = getFirestore();
-  const snap = await db.collection("users").doc(uid).get();
+  const snap = await withDbTimeout(db.collection("users").doc(uid).get(), "getChallenge");
   if (!snap.exists) return null;
   const data = snap.data() || {};
   const challenge = typeof data.webauthnChallenge === "string" ? data.webauthnChallenge : null;
@@ -124,17 +144,20 @@ async function getChallenge(uid: string) {
 
 async function clearChallenge(uid: string) {
   const db = getFirestore();
-  await db
-    .collection("users")
-    .doc(uid)
-    .set(
-      {
-        webauthnChallenge: null,
-        webauthnChallengeType: null,
-        webauthnChallengeAt: null,
-      },
-      { merge: true }
-    );
+  await withDbTimeout(
+    db
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          webauthnChallenge: null,
+          webauthnChallengeType: null,
+          webauthnChallengeAt: null,
+        },
+        { merge: true }
+      ),
+    "clearChallenge"
+  );
 }
 
 function challengeFresh(ts: string | null): boolean {
@@ -175,14 +198,13 @@ function ensureOrigins(): string[] {
 /* -------------------- Authenticated routes (requires Firebase ID token) -------------------- */
 
 router.get("/passkeys", verifyAuth, async (req: Request, res: Response) => {
-  const timeoutMs = 7000;
   const started = Date.now();
   try {
     const uid = (req as any).user?.uid || (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     log.info({ uid, route: "passkeys", phase: "start" }, "passkeys request");
-    await withTimeout(Promise.resolve().then(() => ensureAdmin()), timeoutMs, "ensureAdmin");
-    const passkeys = await withTimeout(getPasskeys(uid), timeoutMs, "getPasskeys");
+    await ensureAdminReady();
+    const passkeys = await getPasskeys(uid);
     const sorted = passkeys.sort((a, b) => {
       const aTs = a.last_used_at || a.created_at || "";
       const bTs = b.last_used_at || b.created_at || "";
@@ -211,18 +233,21 @@ router.delete("/passkeys/:id", verifyAuth, async (req: Request, res: Response) =
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     const id = String(req.params.id || "").trim();
     if (!id) return res.status(400).json({ ok: false, error: "id required" });
-    ensureAdmin();
+    await ensureAdminReady();
     const db = getFirestore();
-    await db.collection("users").doc(uid).collection(PASSKEY_COLLECTION).doc(id).delete();
+    await withDbTimeout(
+      db.collection("users").doc(uid).collection(PASSKEY_COLLECTION).doc(id).delete(),
+      "deletePasskey"
+    );
     return res.json({ ok: true });
   } catch (err: any) {
     log.error({ err }, "DELETE /passkeys/:id failed");
-    return res.status(500).json({ ok: false, error: "internal error" });
+    const isTimeout = err?.message?.toString().includes("timeout");
+    return res.status(isTimeout ? 504 : 500).json({ ok: false, error: "internal error" });
   }
 });
 
 router.post("/register/options", verifyAuth, async (req: Request, res: Response) => {
-  const timeoutMs = 7000;
   const started = Date.now();
   try {
     const uid = (req as any).user?.uid || (req as any).uid;
@@ -231,8 +256,8 @@ router.post("/register/options", verifyAuth, async (req: Request, res: Response)
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
 
     log.info({ uid, route: "register/options", phase: "start" }, "passkey options request");
-    await withTimeout(Promise.resolve().then(() => ensureAdmin()), timeoutMs, "ensureAdmin");
-    const passkeys = await withTimeout(getPasskeys(uid), timeoutMs, "getPasskeys");
+    await ensureAdminReady();
+    const passkeys = await getPasskeys(uid);
 
     const options = await generateRegistrationOptions({
       rpName: DEFAULT_RP_NAME,
@@ -277,7 +302,7 @@ router.post("/register/verify", verifyAuth, async (req: Request, res: Response) 
       return res.status(400).json({ ok: false, error: "credential required" });
     }
 
-    ensureAdmin();
+    await ensureAdminReady();
     const pending = await getChallenge(uid);
     if (!pending?.challenge || pending.type !== "registration" || !challengeFresh(pending.ts)) {
       return res.status(400).json({ ok: false, error: "no valid registration challenge" });
@@ -312,26 +337,29 @@ router.post("/register/verify", verifyAuth, async (req: Request, res: Response) 
         ? req.body.client.userAgent.slice(0, 200)
         : undefined;
 
-    await db
-      .collection("users")
-      .doc(uid)
-      .collection(PASSKEY_COLLECTION)
-      .doc(id)
-      .set(
-        {
-          credentialId: id,
-          publicKey: Buffer.from(verifiedCredential.publicKey).toString("base64url"),
-          counter: verifiedCredential.counter || 0,
-          deviceType: credentialDeviceType,
-          backedUp: credentialBackedUp,
-          transports: credential.response?.transports,
-          label,
-          userAgent,
-          created_at: now,
-          last_used_at: now,
-        },
-        { merge: true }
-      );
+    await withDbTimeout(
+      db
+        .collection("users")
+        .doc(uid)
+        .collection(PASSKEY_COLLECTION)
+        .doc(id)
+        .set(
+          {
+            credentialId: id,
+            publicKey: Buffer.from(verifiedCredential.publicKey).toString("base64url"),
+            counter: verifiedCredential.counter || 0,
+            deviceType: credentialDeviceType,
+            backedUp: credentialBackedUp,
+            transports: credential.response?.transports,
+            label,
+            userAgent,
+            created_at: now,
+            last_used_at: now,
+          },
+          { merge: true }
+        ),
+      "storePasskey"
+    );
 
     await clearChallenge(uid);
 
@@ -341,13 +369,16 @@ router.post("/register/verify", verifyAuth, async (req: Request, res: Response) 
     const msg = err?.message?.includes("was not set in the registration ceremony")
       ? "challenge mismatch"
       : err?.message || "internal error";
-    return res.status(400).json({ ok: false, error: msg });
+    const isTimeout = err?.message?.toString().includes("timeout");
+    const status = isTimeout ? 504 : 400;
+    return res.status(status).json({ ok: false, error: msg });
   }
 });
 
 /* -------------------- Public routes (used before Firebase auth is available) -------------------- */
 
 router.post("/authenticate/options", async (req: Request, res: Response) => {
+  const started = Date.now();
   try {
     const rawPhone = typeof req.body?.phone === "string" ? req.body.phone : "";
     const phone = sanitizePhone(rawPhone);
@@ -370,14 +401,20 @@ router.post("/authenticate/options", async (req: Request, res: Response) => {
 
     await setChallenge(user.uid, "authentication", options.challenge);
 
+    log.info(
+      { route: "authenticate/options", phone, uid: user.uid, ms: Date.now() - started },
+      "authentication options ok"
+    );
     return res.json({ ok: true, options });
   } catch (err: any) {
-    log.error({ err }, "authenticate/options failed");
-    return res.status(500).json({ ok: false, error: err?.message || "internal error" });
+    log.error({ err, route: "authenticate/options", ms: Date.now() - started }, "authenticate/options failed");
+    const isTimeout = err?.message?.toString().includes("timeout");
+    return res.status(isTimeout ? 504 : 500).json({ ok: false, error: err?.message || "internal error" });
   }
 });
 
 router.post("/authenticate/verify", async (req: Request, res: Response) => {
+  const started = Date.now();
   try {
     const rawPhone = typeof req.body?.phone === "string" ? req.body.phone : "";
     const phone = sanitizePhone(rawPhone);
@@ -402,12 +439,10 @@ router.post("/authenticate/verify", async (req: Request, res: Response) => {
 
     const credentialId = credential.id;
     const db = getFirestore();
-    const passkeySnap = await db
-      .collection("users")
-      .doc(user.uid)
-      .collection(PASSKEY_COLLECTION)
-      .doc(credentialId)
-      .get();
+    const passkeySnap = await withDbTimeout(
+      db.collection("users").doc(user.uid).collection(PASSKEY_COLLECTION).doc(credentialId).get(),
+      "getPasskeyForAuth"
+    );
 
     if (!passkeySnap.exists) {
       return res.status(404).json({ ok: false, error: "passkey not registered" });
@@ -433,18 +468,26 @@ router.post("/authenticate/verify", async (req: Request, res: Response) => {
     }
 
     const { newCounter } = verification.authenticationInfo;
-    await passkeySnap.ref.set(
-      { counter: newCounter, last_used_at: nowIso() },
-      { merge: true }
+    await withDbTimeout(
+      passkeySnap.ref.set({ counter: newCounter, last_used_at: nowIso() }, { merge: true }),
+      "updatePasskeyCounter"
     );
     await clearChallenge(user.uid);
 
     const adminAuth = getAdminAuth();
     const token = await adminAuth.createCustomToken(user.uid, { phone });
+    log.info(
+      { route: "authenticate/verify", phone, uid: user.uid, ms: Date.now() - started },
+      "authentication verify ok"
+    );
     return res.json({ ok: true, token });
   } catch (err: any) {
-    log.error({ err }, "authenticate/verify failed");
-    const status = err?.message?.includes("challenge") ? 400 : 500;
+    log.error(
+      { err, route: "authenticate/verify", ms: Date.now() - started },
+      "authenticate/verify failed"
+    );
+    const isTimeout = err?.message?.toString().includes("timeout");
+    const status = isTimeout ? 504 : err?.message?.includes("challenge") ? 400 : 500;
     return res.status(status).json({ ok: false, error: err?.message || "internal error" });
   }
 });

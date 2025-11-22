@@ -2,8 +2,16 @@
 // Express app (no .listen here). Used by both local dev and Vercel serverless.
 
 /// <reference path="../types/express/index.d.ts" />
-import dotenv from "dotenv";
-dotenv.config({ path: ".env.local" }); // Vercel ignores .env.local; envs must be set in dashboard
+import type * as Dotenv from "dotenv";
+// Load .env.local if dotenv is available; swallow missing module in serverless bundle.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const dotenv = require("dotenv") as typeof Dotenv;
+  dotenv.config({ path: ".env.local" }); // Vercel ignores .env.local; envs must be set in dashboard
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.warn("[app] dotenv not loaded (likely not bundled in serverless)", err && (err as any).message);
+}
 
 import express, { Request, Response, NextFunction, Router } from "express";
 import cors from "cors";
@@ -60,10 +68,22 @@ const allowedOrigins = Array.from(
   new Set([...defaultOrigins, ...envOrigins, ...(vercelOrigin ? [vercelOrigin] : [])])
 );
 
+function isAllowedOrigin(origin?: string | null) {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    if (url.hostname.endsWith(".vercel.app")) return true;
+  } catch {
+    // fall through to reject
+  }
+  return false;
+}
+
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) callback(null, true);
+      if (isAllowedOrigin(origin)) callback(null, true);
       else callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
@@ -105,9 +125,23 @@ app.get("/metrics", async (req, res) => {
 });
 
 app.get("/api/debug/token", async (req, res) => {
-  // Temporary probe: short-circuit to verify the route is reachable without hanging.
-  // Remove after debugging the timeout issue in verifyIdToken.
-  return res.json({ ok: true, probe: true });
+  try {
+    const authHeader = req.headers.authorization || "";
+    const match = authHeader.match(/^Bearer (.+)$/);
+    if (!match || !match[1]) {
+      return res.status(400).json({ ok: false, error: "no bearer token" });
+    }
+    ensureAdmin();
+    const timeoutMs = 8000;
+    const decoded = await Promise.race([
+      getAdminAuth().verifyIdToken(match[1], true),
+      new Promise((_r, rej) => setTimeout(() => rej(new Error("verifyIdToken timeout")), timeoutMs)),
+    ]);
+    return res.json({ ok: true, decoded });
+  } catch (err: any) {
+    log.error({ err }, "debug token verification failed");
+    return res.status(401).json({ ok: false, error: err?.message || "verify failed" });
+  }
 });
 
 /* -------------------- Auth Mint Token -------------------- */

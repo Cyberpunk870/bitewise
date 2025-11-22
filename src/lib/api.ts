@@ -5,7 +5,9 @@
 import { getAuth, onAuthStateChanged, type User } from "firebase/auth";
 
 // ✅ FIXED: Correct base depending on dev/prod
-const BASE = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
+import { resolveApiBase } from "./apiBase";
+
+const BASE = resolveApiBase();
 
 // --- Wait for Firebase to restore the user (used by authHeader) ---
 async function waitForFirebaseUser(maxMs = 8000): Promise<User | null> {

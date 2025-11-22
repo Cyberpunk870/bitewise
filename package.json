@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build:server": "tsc -P backend-lib/tsconfig.server.json --pretty false",
+    "build:server": "tsc -P backend-lib/tsconfig.server.json --pretty false && cp -r dist/backend-lib backend-cjs",
     "build": "npm run build:server && vite build",
     "vercel-build": "npm run build",
     "start": "node dist/backend-lib/app.js",
