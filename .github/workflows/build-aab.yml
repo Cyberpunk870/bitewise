@@ -1,5 +1,4 @@
 name: Build AAB
-
 on:
   workflow_dispatch:
   push:
@@ -21,8 +20,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install SDK packages
+      - name: Install SDK packages (auto-accept licenses)
         run: |
+          yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Cache Gradle
