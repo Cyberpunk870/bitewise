@@ -33,20 +33,22 @@ export default function ReturnBanner() {
         <span className="text-sm font-medium">{label}</span>
         <div className="flex items-center gap-2">
           <button
-            className="text-sm rounded-full bg-white text-black px-3 py-1 font-semibold"
+            className="text-sm rounded-full bg-white text-black px-3 py-1 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
             onClick={async () => {
               try { await confirmOrderPlaced(); } catch {}
               setVisible(false);
             }}
+            aria-label="Confirm order placed"
           >
             I placed it
           </button>
           <button
-            className="text-sm rounded-full border border-white/30 px-3 py-1 text-white/80"
+            className="text-sm rounded-full border border-white/30 px-3 py-1 text-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             onClick={() => {
               try { clearPendingReturn(); } catch {}
               setVisible(false);
             }}
+            aria-label="Not yet placed"
           >
             Not yet
           </button>

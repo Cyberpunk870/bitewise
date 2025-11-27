@@ -16,6 +16,7 @@ export default function Unlock() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [supported, setSupported] = useState<boolean | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const phone = useMemo(() => {
     try {
@@ -82,8 +83,12 @@ export default function Unlock() {
 
     setBusy(true);
     setStatus('Requesting secure challenge…');
+    setErrorMsg(null);
     try {
       const options = await requestAuthenticationOptions(phone);
+      if (!options || !options.challenge) {
+        throw new Error('Passkey challenge unavailable. Please try again or use OTP.');
+      }
       setStatus('Waiting for your device passkey…');
       const assertion = await startAuthentication(options);
       setStatus('Verifying passkey with BiteWise…');
@@ -126,15 +131,27 @@ export default function Unlock() {
       const code = String(err?.name || '').toLowerCase();
       const statusCode = typeof err?.status === 'number' ? err.status : null;
       if (code === 'notallowederror' || code === 'aborterror') {
-        toast.info('Passkey request was cancelled.');
+        const msg = 'Passkey request was cancelled.';
+        setErrorMsg(msg);
+        toast.info(msg);
       } else if (statusCode === 404) {
-        toast.error('No passkey found for this account. Use OTP to sign in again.');
+        const msg = 'No passkey found for this account. Use OTP to sign in again.';
+        setErrorMsg(msg);
+        toast.error(msg);
         nav('/onboarding/auth/phone?mode=login', { replace: true });
       } else if (statusCode === 400) {
-        toast.error(err?.message || 'Passkey challenge expired. Try again.');
+        const msg = err?.message || 'Passkey challenge expired. Try again.';
+        setErrorMsg(msg);
+        toast.error(msg);
+      } else if (statusCode === 504) {
+        const msg = 'Passkey timed out. Try again or use OTP.';
+        setErrorMsg(msg);
+        toast.error(msg);
       } else {
         console.error('Unlock flow failed', err);
-        toast.error('Could not unlock. Please try again or use OTP.');
+        const msg = 'Could not unlock. Please try again or use OTP.';
+        setErrorMsg(msg);
+        toast.error(msg);
       }
     } finally {
       setStatus('');
@@ -165,6 +182,11 @@ export default function Unlock() {
         {status ? (
           <div className="text-xs rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-gray-700">
             {status}
+          </div>
+        ) : null}
+        {errorMsg ? (
+          <div className="text-xs rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-600">
+            {errorMsg}
           </div>
         ) : null}
         {supported === false ? (

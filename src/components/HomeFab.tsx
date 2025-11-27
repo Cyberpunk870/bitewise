@@ -21,7 +21,7 @@ export default function HomeFab() {
     <button
       type="button"
       onClick={() => nav('/home', { replace: true })}
-      className="fixed right-3 bottom-20 h-10 w-10 grid place-items-center rounded-xl border bg-white/90 shadow"
+      className="fixed right-3 bottom-20 h-10 w-10 grid place-items-center rounded-xl border bg-white/90 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
       aria-label="Go home"
       title="Go home"
     >

@@ -118,12 +118,21 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
   };
 
   try {
-    inflightGetToken = inflightGetToken || doGet();
-    let fcmToken = await inflightGetToken;
-    inflightGetToken = null;
+    const retryGet = async () => {
+      inflightGetToken = inflightGetToken || doGet();
+      let fcmToken = await inflightGetToken;
+      inflightGetToken = null;
+      if (!fcmToken) {
+        await new Promise((r) => setTimeout(r, 800));
+        fcmToken = await doGet();
+      }
+      return fcmToken;
+    };
+
+    let fcmToken = await retryGet();
     if (!fcmToken) {
-      await new Promise((r) => setTimeout(r, 800));
-      fcmToken = await doGet();
+      await new Promise((r) => setTimeout(r, 1200));
+      fcmToken = await retryGet();
     }
     if (!fcmToken) return;
 
@@ -154,6 +163,19 @@ export async function initOrRefreshPushOnAuth(phoneHint?: string) {
     track("push_registration_failed", { reason: (err as Error)?.message });
   }
 }
+
+// Re-run push registration when auth changes or window focuses (soft refresh)
+try {
+  if (typeof window !== "undefined") {
+    const auth = getAuth();
+    auth.onAuthStateChanged(() => {
+      void initOrRefreshPushOnAuth();
+    });
+    window.addEventListener("focus", () => {
+      void initOrRefreshPushOnAuth();
+    });
+  }
+} catch {}
 
 /* ----------------------------- Local test notification ----------------------------- */
 export async function sendLocalTestNotification(

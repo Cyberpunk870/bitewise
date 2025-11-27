@@ -72,6 +72,10 @@ export async function hydrateActiveFromCloud(): Promise<boolean> {
     if (!USE_CLOUD) return false;
     const user = await getAuthedUser();
     if (!user) return false;
+    const fb = await ensureFirebaseBoot();
+    // If auth has been cleared (idle logout), abort before hitting API to avoid bearer-token errors.
+    if (!fb.auth.currentUser) return false;
+
     const phone = getActivePhone();
     if (!phone) return false;
     const remote = await getUserProfile();
@@ -87,8 +91,12 @@ export async function hydrateActiveFromCloud(): Promise<boolean> {
     saveProfile(merged);
     lastPushedSnapshot = stableSnapshot(merged);
     return true;
-  } catch (err) {
-    console.warn('[cloudProfile] hydrateActiveFromCloud failed', err);
+  } catch (err: any) {
+    const msg = err?.message || String(err || "");
+    // Expected during idle logout when auth is cleared and bearer token is missing.
+    if (!msg.toLowerCase().includes("missing bearer token")) {
+      console.warn('[cloudProfile] hydrateActiveFromCloud failed', err);
+    }
     return false;
   }
 }

@@ -8,9 +8,10 @@
   },
   "scripts": {
     "dev": "vite",
-    "build:server": "tsc -P backend-lib/tsconfig.server.json --pretty false && cp -r dist/backend-lib backend-cjs",
+    "build:server": "tsc -P backend-lib/tsconfig.server.json --pretty false && rm -rf backend-cjs api/backend-lib api/backend-cjs && mkdir -p backend-cjs api/backend-lib && cp -r dist/backend-lib/* backend-cjs/ && cp -r dist/backend-lib/* api/backend-lib/ && cp -r backend-cjs api/backend-cjs",
+    "bundle:api": "true",
     "build": "npm run build:server && vite build",
-    "vercel-build": "npm run build",
+    "vercel-build": "npm run build && npm run bundle:api",
     "start": "node dist/backend-lib/app.js",
     "lint": "eslint .",
     "test": "jest",

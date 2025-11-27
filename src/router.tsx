@@ -30,8 +30,11 @@ const History = lazy(() => import('./screens/orders/History'));
 const Settings = lazy(() => import('./screens/settings/Settings'));
 const Achievements = lazy(() => import('./screens/achievements/Achievements'));
 const AdminAnalytics = lazy(() => import('./screens/admin/Analytics'));
+const AdminThemes = lazy(() => import('./screens/admin/Themes'));
+const Offers = lazy(() => import('./screens/offers/Offers'));
 const Terms = lazy(() => import('./screens/legal/Terms'));
 const Privacy = lazy(() => import('./screens/legal/Privacy'));
+const RewardsPolicy = lazy(() => import('./screens/legal/RewardsPolicy'));
 
 const SUSPENSE_FALLBACK = (
   <div className="min-h-dvh grid place-items-center text-white/70">
@@ -87,6 +90,7 @@ const router = createBrowserRouter([
       { path: '/', element: withSuspense(<Welcome />) },
       { path: '/legal/terms', element: withSuspense(<Terms />) },
       { path: '/legal/privacy', element: withSuspense(<Privacy />) },
+      { path: '/legal/rewards', element: withSuspense(<RewardsPolicy />) },
 
       // Handy reset route
       { path: '/reset', element: <Reset /> },
@@ -135,6 +139,8 @@ const router = createBrowserRouter([
           { path: '/settings',       element: withSuspense(<Settings />) },
           { path: '/achievements',   element: withSuspense(<Achievements />) },
           { path: '/admin/analytics', element: withSuspense(<AdminAnalytics />) },
+          { path: '/admin/themes', element: withSuspense(<AdminThemes />) },
+          { path: '/offers',         element: withSuspense(<Offers />) },
         ],
       },
 

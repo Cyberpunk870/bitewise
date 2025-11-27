@@ -133,6 +133,43 @@ export function addCoins(amount: number, reason: string) {
   return apiPost(`/user/coins/add`, { amount, reason });
 }
 
+export function getCoinsSummary() {
+  return apiGet(`/user/coins/summary`);
+}
+
+// ------------------------------------------------------------------
+// 🤝 Referrals
+// ------------------------------------------------------------------
+export function getReferralStatus() {
+  return apiGet(`/referral/status`);
+}
+
+export function createReferralCode() {
+  return apiPost(`/referral/create`, {});
+}
+
+export function redeemReferralCode(code: string) {
+  return apiPost(`/referral/redeem`, { code });
+}
+
+// ------------------------------------------------------------------
+// 🎨 Themes / promos
+// ------------------------------------------------------------------
+export async function fetchThemesPublic() {
+  const res = await fetch(`${resolveApiBase()}/themes`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.ok === false) throw new Error(data?.error || 'Failed to fetch themes');
+  return data.themes || [];
+}
+
+export function trackThemeEvent(name: string, event: 'impression' | 'click') {
+  return fetch(`${resolveApiBase()}/themes/track`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, event }),
+  }).catch(() => {});
+}
+
 // ------------------------------------------------------------------
 // 📊 Analytics
 // ------------------------------------------------------------------

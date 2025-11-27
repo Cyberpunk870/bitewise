@@ -9,6 +9,7 @@ import {
 } from './api';
 import { setTokens } from './tokens'; // <- existing setter from tokens.ts
 import { track } from './track';
+import { addSavings } from '../store/savings';
 
 export type OutboundCtx = {
   id?: string;               // backend id from /api/orders/outbound
@@ -206,6 +207,13 @@ export async function confirmOrderPlaced(): Promise<{
   }
 
   // --- 4. UX feedback ---
+  if (saved > 0) {
+    try {
+      addSavings(saved);
+    } catch {
+      /* ignore local persistence issues */
+    }
+  }
   if (saved > 0) {
     emit('bw:toast', {
       title: 'Nice savings!',

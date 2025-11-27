@@ -1,0 +1,17 @@
+{
+  "name": "bitewise-api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "commonjs",
+  "dependencies": {
+    "@simplewebauthn/server": "^13.2.2",
+    "body-parser": "^2.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.0.1",
+    "firebase-admin": "^13.5.0",
+    "morgan": "^1.10.1",
+    "pino": "^9.1.0",
+    "prom-client": "^15.1.0"
+  }
+}

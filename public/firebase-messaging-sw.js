@@ -1,5 +1,6 @@
 // Firebase Messaging Service Worker
 // Loaded by the browser (not bundled). Keep it lean and self-contained.
+// Version: v2
 
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');

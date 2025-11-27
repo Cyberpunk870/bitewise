@@ -13,6 +13,9 @@ export function loadGoogleMaps(): Promise<typeof google> {
       apiKey,
       version: 'weekly',
       libraries: ['places', 'marker'],
+      // defer script injection to avoid blocking initial load
+      // inject script tag with defer true
+      // (Loader handles script creation; we rely on async load)
     });
   }
   if (!loadPromise) loadPromise = loader.load();

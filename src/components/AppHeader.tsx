@@ -16,7 +16,7 @@ const HeaderActions = React.lazy(() => import('./HeaderActions'));
 /* icons */
 function MicIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" role="img" aria-label="Voice search" {...props}>
       <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" />
       <path d="M5 11a7 7 0 0 0 14 0" />
       <path d="M12 19v3" />
@@ -34,7 +34,7 @@ function CartIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 function MenuIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" role="img" aria-label="Menu" {...props}>
       <path d="M4 6h16M4 12h16M4 18h16" />
     </svg>
   );
@@ -156,6 +156,7 @@ export default function AppHeader() {
   const name = profile?.name?.trim() ? profile.name : 'Guest';
   const addressLine = profile?.addressLine || '';
   const addressLabel = profile?.addressLabel || '';
+  const addressTextId = 'nav-address';
 
   /* search */
   const [placeholder, setPlaceholder] = useState('Search dishes...');
@@ -380,6 +381,7 @@ export default function AppHeader() {
       id: 'bot-intro',
       from: 'bot',
       text: "Hey, I'm YummiBot. Ask me for dishes, cuisines, or what's trending!",
+      pills: ['🔥 Trending', '⭐ Favorites', '🍽️ Frequently ordered', '🥗 Salads', '🍕 Pizza', '🧆 Biryani'],
     },
   ]);
 
@@ -415,12 +417,14 @@ export default function AppHeader() {
             const reason = m.reason ? ` — ${m.reason}` : '';
             return `${m.dish.name}${cuisine}${reason}`;
           }),
+          pills: ['🔥 Trending', '⭐ Favorites', '🍽️ Frequently ordered'],
         });
       } else {
         pushBotMessage({
           id: `bot-${Date.now()}`,
           from: 'bot',
           text: `Hmm, I couldn’t find “${trimmed}”. Try a different spelling or ask for a cuisine like “thai curry”.`,
+          pills: ['🔥 Trending', '⭐ Favorites', '🍽️ Frequently ordered', '🥘 North Indian', '🍝 Pasta'],
         });
       }
       setBotTyping(false);
@@ -442,7 +446,7 @@ export default function AppHeader() {
             Welcome, <span className="font-medium">{name}</span>
           </p>
           {!!(addressLine || addressLabel) && (
-            <p className="text-xs text-white/60">
+            <p className="text-xs text-white/60" id={addressTextId}>
               {addressLabel ? <span className="font-medium">{addressLabel}</span> : null}
               {addressLabel && addressLine ? ' — ' : ''}
               {addressLine}
@@ -476,7 +480,7 @@ export default function AppHeader() {
           {inputValue && (
             <button
               type="button"
-              className="absolute right-10 top-1/2 -translate-y-1/2 h-7 w-7 grid place-items-center rounded-md bg-white/10 text-white/80 hover:bg-white/20"
+              className="absolute right-10 top-1/2 -translate-y-1/2 h-7 w-7 grid place-items-center rounded-md bg-white/80 text-slate-900 hover:bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
               onClick={clearInput}
               aria-label="Clear search"
             >
@@ -485,10 +489,17 @@ export default function AppHeader() {
           )}
           <button
             type="button"
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg border border-white/20 bg-white/10 text-white hover:bg-white/20 transition"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg border border-white/40 bg-white/90 text-slate-900 hover:bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
             onClick={handleVoice}
             aria-label="Voice search"
             title="Voice search"
+            id="nav-mic"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleVoice();
+              }
+            }}
           >
             <MicIcon />
           </button>
@@ -508,6 +519,8 @@ export default function AppHeader() {
             resetFilters={resetFilters}
             logout={logout}
             tokens={tokens}
+            cartId="nav-cart"
+            menuId="nav-menu"
           />
         </Suspense>
       </div>
@@ -533,6 +546,7 @@ export default function AppHeader() {
           aria-label="Yummibot"
           onClick={() => setBotOpen((v) => !v)}
           className="fixed right-4 bottom-4 h-14 w-14 grid place-items-center rounded-full shadow-2xl border border-white/20 bg-white/10 text-white z-40 backdrop-blur"
+          id="yummibot-trigger"
         >
           <BurgerAvatar className="h-9 w-9" />
         </button>

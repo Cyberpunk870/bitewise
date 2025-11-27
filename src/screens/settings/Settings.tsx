@@ -17,9 +17,14 @@ import { manualLogout } from '../../lib/session';
 import { emit } from '../../lib/events';
 import { toast } from '../../store/toast';
 import { upsertProfile } from '../../lib/api';
+import { getReferralStatus, createReferralCode, redeemReferralCode } from '../../lib/api';
+import { getCoinsSummary } from '../../lib/api';
 import { getAddresses as apiGetAddresses, addAddress as apiAddAddress } from '../../lib/api';
 import { getAuth } from 'firebase/auth';
 import { fetchPasskeys, deletePasskey, type PasskeySummary } from '../../lib/webauthnClient';
+import { initOrRefreshPushOnAuth } from '../../lib/notify';
+import { resolveApiBase } from '../../lib/apiBase';
+import NotificationsPanel from './NotificationsPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Address shape mirrored from backend
@@ -131,6 +136,72 @@ export default function Settings() {
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const hasPk = passkeys.length > 0;
 
+  // Push notifications
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushStatus, setPushStatus] = useState<'checking' | 'blocked' | 'granted' | 'registered' | 'prompt'>('checking');
+
+  // Coins summary
+  const [coins, setCoins] = useState<{
+    total_coins: number;
+    dailyEarned: number;
+    monthlyEarned: number;
+    dailyRemaining: number;
+    monthlyRemaining: number;
+    dailyCap: number;
+    monthlyCap: number;
+    redeemableCap: number;
+  } | null>(null);
+
+  // Referrals
+  const [refBusy, setRefBusy] = useState(false);
+  const [refStatus, setRefStatus] = useState<{
+    code: string | null;
+    uses: number;
+    uses_limit: number;
+    redeemed?: any;
+    rewards?: { referrer: number; redeemer: number };
+  } | null>(null);
+  const [redeemCode, setRedeemCode] = useState('');
+  const [redeemMsg, setRedeemMsg] = useState<string | null>(null);
+  const [redeemErr, setRedeemErr] = useState<string | null>(null);
+
+  const refreshPushStatus = useCallback(() => {
+    try {
+      const perm = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+      const cached = (() => {
+        try { return localStorage.getItem('bw.push.token'); } catch { return null; }
+      })();
+      if (perm === 'denied') {
+        setPushStatus('blocked');
+      } else if (cached && perm === 'granted') {
+        setPushStatus('registered');
+      } else if (perm === 'granted') {
+        setPushStatus('granted');
+      } else {
+        setPushStatus('prompt');
+      }
+    } catch {
+      setPushStatus('prompt');
+    }
+  }, []);
+
+  const fetchPushStatus = useCallback(async () => {
+    try {
+      const user = getAuth().currentUser;
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(`${resolveApiBase()}/push/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.ok) {
+        setPushStatus(data.registered ? 'registered' : 'granted');
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const refreshPasskeys = useCallback(async () => {
     if (!phone) {
       setPasskeys([]);
@@ -153,6 +224,54 @@ export default function Settings() {
       window.removeEventListener('bw:passkey:set' as any, handler as any);
     };
   }, [refreshPasskeys]);
+
+  useEffect(() => {
+    refreshPushStatus();
+    fetchPushStatus();
+  }, [refreshPushStatus, fetchPushStatus]);
+
+  // Referral status loader
+  const loadReferral = useCallback(async () => {
+    if (!getAuth().currentUser) return;
+    try {
+      setRefBusy(true);
+      const res = await getReferralStatus();
+      setRefStatus({
+        code: res.code ?? null,
+        uses: Number(res.uses || 0),
+        uses_limit: Number(res.uses_limit || 3),
+        redeemed: res.redeemed,
+        rewards: res.rewards,
+      });
+    } catch (err: any) {
+      setRefStatus(null);
+      console.warn('referral status failed', err);
+    } finally {
+      setRefBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReferral();
+  }, [loadReferral, uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+    getCoinsSummary()
+      .then((res) => setCoins(res))
+      .catch(() => setCoins(null));
+  }, [uid]);
+
+  useEffect(() => {
+    const onCoins = () => {
+      if (!uid) return;
+      getCoinsSummary()
+        .then((res) => setCoins(res))
+        .catch(() => setCoins(null));
+    };
+    window.addEventListener('bw:coins:updated' as any, onCoins as any);
+    return () => window.removeEventListener('bw:coins:updated' as any, onCoins as any);
+  }, [uid]);
 
   // Keep local radio state in sync if changed elsewhere
   useEffect(() => {
@@ -294,6 +413,57 @@ export default function Settings() {
 
   const goSetPasskey = () => {
     nav('/onboarding/setpasskey');
+  };
+
+  const enablePush = async () => {
+    if (!uid) {
+      toast.error('Sign in to enable push notifications.');
+      return;
+    }
+    setPushBusy(true);
+    try {
+      await initOrRefreshPushOnAuth(phone || undefined);
+      refreshPushStatus();
+      await fetchPushStatus();
+      toast.success('Push notifications enabled');
+    } catch (err) {
+      console.warn('enablePush failed', err);
+      toast.error('Could not enable push. Check permissions and try again.');
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const sendPushTest = async () => {
+    if (!uid) {
+      toast.error('Sign in to send a test notification.');
+      return;
+    }
+    setPushBusy(true);
+    try {
+      const token = await getAuth().currentUser?.getIdToken();
+      if (!token) throw new Error('missing token');
+      const res = await fetch(`${resolveApiBase()}/push/sendTest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: 'BiteWise', body: 'Notifications are live!' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || res.statusText);
+      }
+      toast.success('Test notification sent');
+    } catch (err) {
+      console.warn('sendPushTest failed', err);
+      // Fallback: local notification if permission is granted
+      const shown = await sendLocalTestNotification('BiteWise test', 'If you see this, push works locally.');
+      if (!shown) toast.error('Could not send test. Check permissions.');
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   const PolicyRadios = (props: { k: PermKey; label: string; helper?: string }) => {
@@ -464,6 +634,8 @@ export default function Settings() {
           <p className="opacity-90">Manage permissions, theme, passkey and account.</p>
         </div>
 
+        <NotificationsPanel />
+
         {/* Account */}
         <section className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow text-sm">
           <div className="flex items-center justify-between">
@@ -514,9 +686,220 @@ export default function Settings() {
           </div>
         </section>
 
+        {/* Coins & Rewards */}
+        <section className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow text-sm space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-base font-semibold">BiteCoins</div>
+              <div className="opacity-80">
+                Daily cap {coins?.dailyCap ?? 30}, monthly cap {coins?.monthlyCap ?? 500}. Up to 80% redeemable monthly.
+              </div>
+            </div>
+            <button
+              onClick={() => nav('/legal/rewards')}
+              className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20"
+            >
+              View policy
+            </button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/15 bg-white/70 dark:bg-white/5 p-3">
+              <div className="text-xs uppercase tracking-[0.18em] text-white/60">Balance</div>
+              <div className="text-3xl font-semibold mt-1">{coins?.total_coins ?? '—'}</div>
+              <div className="text-xs opacity-70 mt-1">
+                Redeemable this month: {coins ? Math.max(0, Math.min(coins.redeemableCap, coins.monthlyCap * 0.8)) : '—'}
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/15 bg-white/70 dark:bg-white/5 p-3 space-y-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span>Today earned</span>
+                <span className="font-semibold">{coins?.dailyEarned ?? '—'} / {coins?.dailyCap ?? 30}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Remaining today</span>
+                <span className="font-semibold">{coins?.dailyRemaining ?? '—'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>This month earned</span>
+                <span className="font-semibold">{coins?.monthlyEarned ?? '—'} / {coins?.monthlyCap ?? 500}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Remaining this month</span>
+                <span className="font-semibold">{coins?.monthlyRemaining ?? '—'}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Referrals */}
+        <section className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow text-sm space-y-3">
+          <div className="flex flex-col gap-1">
+            <div className="text-base font-semibold">Referrals</div>
+            <div className="opacity-80">
+              Share your code to earn coins. Referrer +{refStatus?.rewards?.referrer ?? 50} coins,
+              friend +{refStatus?.rewards?.redeemer ?? 25} coins. Cap: 3 redemptions per code.
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/15 bg-white/70 dark:bg-white/5 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="space-y-1">
+              <div className="text-sm opacity-75">Your code</div>
+              <div className="text-2xl font-extrabold tracking-widest">
+                {refStatus?.code || 'Not generated'}
+              </div>
+              <div className="text-xs opacity-70">
+                Uses: {refStatus?.uses ?? 0}/{refStatus?.uses_limit ?? 3}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+              <button
+                disabled={refBusy}
+                onClick={async () => {
+                  if (refStatus?.code) {
+                    try {
+                      await navigator.clipboard?.writeText(refStatus.code);
+                      toast.success('Copied');
+                    } catch {
+                      toast.error('Copy failed');
+                    }
+                    return;
+                  }
+                  setRefBusy(true);
+                  try {
+                    const res = await createReferralCode();
+                    setRefStatus((s) => ({
+                      ...(s || { uses: 0, uses_limit: res.uses_limit ?? 3, redeemed: null }),
+                      code: res.code,
+                      uses: res.uses ?? 0,
+                      uses_limit: res.uses_limit ?? 3,
+                    }));
+                    toast.success('Code created');
+                  } catch (err: any) {
+                    toast.error(err?.message || 'Could not create code');
+                  } finally {
+                    setRefBusy(false);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20 disabled:opacity-50"
+              >
+                {refStatus?.code ? 'Copy code' : 'Generate code'}
+              </button>
+              {refStatus?.code ? (
+                <button
+                  disabled={refBusy}
+                  onClick={async () => {
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({
+                          title: 'BiteWise referral',
+                          text: `Use my BiteWise code ${refStatus.code} to earn coins!`,
+                        });
+                      } else if (navigator.clipboard) {
+                        await navigator.clipboard.writeText(refStatus.code);
+                        toast.success('Copied to share');
+                      }
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  Share
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/15 bg-white/60 dark:bg-white/5 p-3 space-y-2">
+            <div className="text-sm font-semibold">Redeem a code</div>
+            <div className="text-xs opacity-70">One redemption per account.</div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={redeemCode}
+                onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
+                placeholder="Enter code"
+                className="px-3 py-2 rounded-xl bg-white/80 dark:bg-black/20 border border-white/20 text-sm"
+              />
+              <button
+                disabled={refBusy}
+                onClick={async () => {
+                  setRedeemErr(null);
+                  setRedeemMsg(null);
+                  setRefBusy(true);
+                  try {
+                    await redeemReferralCode(redeemCode);
+                    setRedeemMsg('Code applied! Rewards will reflect in coins shortly.');
+                    toast.success('Redeemed');
+                    await loadReferral();
+                  } catch (err: any) {
+                    const msg = err?.message || 'Failed';
+                    setRedeemErr(msg);
+                    toast.error(msg);
+                  } finally {
+                    setRefBusy(false);
+                  }
+                }}
+                className="px-3 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
+              >
+                Redeem
+              </button>
+            </div>
+            {redeemMsg ? <div className="text-xs text-green-200">{redeemMsg}</div> : null}
+            {redeemErr ? <div className="text-xs text-red-200">{redeemErr}</div> : null}
+            {refStatus?.redeemed ? (
+              <div className="text-xs text-white/80">
+                Already redeemed code {refStatus.redeemed.code} on{' '}
+                {new Date(refStatus.redeemed.redeemed_at).toLocaleDateString()}.
+              </div>
+            ) : null}
+          </div>
+        </section>
+
         {/* Permissions */}
         <section className="space-y-4">
           <div className="text-white/95 font-semibold">Permissions</div>
+
+          {/* Push Notifications */}
+          <div className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <div className="text-base font-semibold">Push notifications</div>
+                <div className="text-sm opacity-80">
+                  Alerts for price drops, big discounts, coupons, and new favorites in town.
+                </div>
+                <div className="text-xs opacity-75">
+                  Status:{' '}
+                  <span className="font-medium">
+                    {pushStatus === 'checking'
+                      ? 'Checking...'
+                      : pushStatus === 'registered'
+                      ? 'Enabled'
+                      : pushStatus === 'granted'
+                      ? 'Allowed (not registered)'
+                      : pushStatus === 'blocked'
+                      ? 'Blocked in browser'
+                      : 'Not enabled'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  disabled={pushBusy}
+                  onClick={enablePush}
+                  className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20 disabled:opacity-50"
+                >
+                  {pushStatus === 'blocked' ? 'Open settings & retry' : 'Enable push'}
+                </button>
+                <button
+                  disabled={pushBusy || pushStatus === 'prompt'}
+                  onClick={sendPushTest}
+                  className="px-3 py-1.5 rounded-xl bg-black/10 dark:bg-white/20 hover:bg-black/20 disabled:opacity-50"
+                >
+                  Send test
+                </button>
+              </div>
+            </div>
+          </div>
 
           <PolicyRadios
             k="location"
@@ -675,6 +1058,12 @@ export default function Settings() {
               className="flex-1 rounded-xl border border-white/30 px-3 py-2 hover:bg-white/5 text-center"
             >
               Privacy Policy
+            </Link>
+            <Link
+              to="/legal/rewards"
+              className="flex-1 rounded-xl border border-white/30 px-3 py-2 hover:bg-white/5 text-center"
+            >
+              Rewards & Notifications
             </Link>
           </div>
         </section>

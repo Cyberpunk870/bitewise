@@ -7,6 +7,7 @@ import useCart from '../../store/cart';
 import { emit } from '../../lib/events';
 import { getLastAvailabilitySync, timeAgo } from '../../lib/dataSync';
 import { startOutbound } from '../../lib/orderReturn';
+import { markTtfRender, markDataEmpty, markDataError } from '../../lib/metricsClient';
 
 type Column = PriceBreakdown & {
   subtotal: number;
@@ -56,6 +57,7 @@ export default function Compare() {
   const nav = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { items } = useCart();
+  const t0Ref = useRef<number>(performance.now());
 
   const [lastSyncTs, setLastSyncTs] = useState<number | null>(() => getLastAvailabilitySync());
   useEffect(() => {
@@ -84,12 +86,34 @@ export default function Compare() {
         : columns[1].platform
       : columns[0]?.platform;
 
+  useEffect(() => {
+    markTtfRender('compare', performance.now() - t0Ref.current);
+  }, []);
+
   if (!restaurant) {
+    markDataError('compare', 'not_found');
     return (
       <main className="min-h-screen bg-white">
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <button className="px-3 py-1.5 text-sm rounded-full border mb-4" onClick={() => nav(-1)}>← Back</button>
+          <button className="px-3 py-1.5 text-sm rounded-full border mb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700" onClick={() => nav(-1)}>← Back</button>
           <p>Restaurant not found.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!columns.length) {
+    markDataEmpty('compare');
+    return (
+      <main className="min-h-screen bg-white">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <button className="px-3 py-1.5 text-sm rounded-full border mb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700" onClick={() => nav(-1)}>← Back</button>
+          <div className="rounded-2xl border p-4 bg-slate-50">
+            <div className="font-semibold mb-1">{restaurant.name}</div>
+            <div className="text-sm text-slate-600">
+              No price breakdown available. Try refreshing later or pick another restaurant.
+            </div>
+          </div>
         </div>
       </main>
     );
@@ -100,7 +124,7 @@ export default function Compare() {
       <div className="max-w-4xl mx-auto w-full px-4 pt-6">
         {/* header */}
         <div className="flex items-center justify-between mb-2">
-          <button className="px-3 py-1.5 text-sm rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20 transition" onClick={() => nav(-1)}>← Back</button>
+          <button className="px-3 py-1.5 text-sm rounded-full border border-white/30 bg-white/10 text-white hover:bg-white/20 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={() => nav(-1)}>← Back</button>
           <h1 className="text-lg font-semibold text-white drop-shadow">Compare prices</h1>
           <div className="text-[11px] text-white/90">
             Last updated: <b className="tabular-nums">{timeAgo(lastSyncTs)}</b>

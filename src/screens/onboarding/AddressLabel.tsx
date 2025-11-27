@@ -52,7 +52,8 @@ export default function AddressLabel() {
 
   const effectiveLabel = selected === 'Other' ? customLabel.trim() : selected;
 
-  const canProceed = !!(addressLine && effectiveLabel && lat && lng);
+  // Allow progress even if lat/lng are missing (e.g., live label prompt), but skip backend upsert in that case.
+  const canProceed = !!(addressLine && effectiveLabel);
 
   async function handleContinue() {
     if (!canProceed) return;
@@ -80,7 +81,7 @@ export default function AddressLabel() {
     // backend will read uid from the bearer token, we do NOT pass uid here
     try {
       const uid = getAuth().currentUser?.uid;
-      if (uid) {
+      if (uid && lat != null && lng != null) {
         await apiAddAddress({
           label: effectiveLabel,
           addressLine,
@@ -90,7 +91,7 @@ export default function AddressLabel() {
         });
         console.log('✅ Address upserted for onboarding user');
       } else {
-        console.warn('⚠️ Skipped Firestore upsert: no Firebase user');
+        console.warn('⚠️ Skipped Firestore upsert: missing auth or coords');
       }
     } catch (err) {
       console.warn('⚠️ Failed to upsert onboarding address:', err);

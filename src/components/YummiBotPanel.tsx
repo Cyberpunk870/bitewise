@@ -5,6 +5,7 @@ export type BotMessage = {
   from: 'bot' | 'user';
   text: string;
   suggestions?: string[];
+  pills?: string[];
 };
 
 type Props = {
@@ -19,7 +20,7 @@ type Props = {
 
 export default function YummiBotPanel({ onClose, messages, typing, input, onInput, onSend, onSuggestion }: Props) {
   return (
-    <div className="fixed right-4 bottom-20 w-80 glass-card border border-white/10 p-4 backdrop-blur-lg z-50 shadow-2xl animate-fade-up">
+    <div className="fixed right-4 bottom-20 w-80 glass-card border border-white/10 p-4 backdrop-blur-lg z-50 shadow-2xl animate-fade-up" role="dialog" aria-label="YummiBot assistant">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-white">
           <span role="img" aria-label="bot">
@@ -27,7 +28,7 @@ export default function YummiBotPanel({ onClose, messages, typing, input, onInpu
           </span>
           YummiBot
         </div>
-        <button className="text-xs text-white/60 hover:text-white" onClick={onClose}>
+        <button className="text-xs text-white/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={onClose} aria-label="Close YummiBot">
           Close
         </button>
       </div>
@@ -50,6 +51,19 @@ export default function YummiBotPanel({ onClose, messages, typing, input, onInpu
                   </li>
                 ))}
               </ul>
+            )}
+            {msg.pills && msg.pills.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {msg.pills.map((pill, idx) => (
+                  <button
+                    key={`${msg.id}-p-${idx}`}
+                    className="px-2 py-1 rounded-full text-[11px] bg-white/15 hover:bg-white/25 text-white/90"
+                    onClick={() => onSuggestion(pill)}
+                  >
+                    {pill}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         ))}

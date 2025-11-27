@@ -13,7 +13,7 @@ export default function TopBanner({
   if (!show) return null;
   return (
     <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[60]">
-      <div className="rounded-full bg-black text-white text-sm px-4 py-2 shadow-lg">
+      <div className="rounded-full bg-black text-white text-sm px-4 py-2 shadow-lg" role="status" aria-live="polite">
         {text}
       </div>
     </div>

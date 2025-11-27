@@ -453,8 +453,12 @@ Promise<void> {
     const uid = getAuth().currentUser?.uid;
     if (uid) {
       await apiAddCoins( t.reward, `task:${t.id}`);
+      emit('bw:coins:updated', { amount: t.reward, reason: 'task' });
     }
-  } catch{}
+  } catch(err:any){
+    console.warn('[coins] add failed', err);
+    addNotice({ kind:'system', title:'Reward delayed', body:'We could not sync coins right now. They will retry shortly.' });
+  }
 }
 
 

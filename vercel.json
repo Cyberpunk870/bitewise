@@ -1,23 +1,11 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/[...all].ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "firebase/service-account.json",
-          "dist/**",
-          "backend-cjs/**"
-        ]
-      }
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "dist" }
+  "buildCommand": "npm run build:server && vite build",
+  "functions": {
+    "api/**": {
+      "includeFiles": "api/backend-cjs/**"
     }
-  ],
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/[...all].ts" },
     { "source": "/backend-api/(.*)", "destination": "/api/$1" },
@@ -40,6 +28,18 @@
       "source": "/icons/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "public,max-age=604800,immutable" }
+      ]
+    },
+    {
+      "source": "/firebase-messaging-sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/pwa-sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
       ]
     }
   ]

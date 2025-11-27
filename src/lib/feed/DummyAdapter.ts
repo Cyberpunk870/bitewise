@@ -1,6 +1,7 @@
 import { addNotice } from '../notifications';
 import { emit } from '../events';
 import { setLastAvailabilitySync } from '../dataSync';
+import { getWatchlist } from '../../store/watchlist';
 
 const DISHES = [
   'Paneer Butter Masala','Masala Dosa','Chicken Biryani','Veg Momos','Margherita Pizza'
@@ -41,7 +42,14 @@ export function startDummyFeed() {
     const kind = pick(['price','tasks','savings'] as const);
     if (kind === 'price') {
       const dish = pick(DISHES);
-      addNotice({ kind, title: 'Price drop!', body: `${dish} now ₹${rand(129,229)} (limited time).` });
+      const body = `${dish} now ₹${rand(129,229)} (limited time).`;
+      addNotice({ kind, title: 'Price drop!', body });
+      const watched = getWatchlist().some(
+        (it) => it.kind === 'dish' && it.name.toLowerCase() === dish.toLowerCase()
+      );
+      if (watched) {
+        addNotice({ kind: 'price', title: 'On your watchlist', body });
+      }
     } else if (kind === 'tasks') {
       addNotice({ kind, title: 'Bonus opportunity', body: 'Make one search to earn +10 Bits.' });
     } else {
@@ -51,6 +59,7 @@ export function startDummyFeed() {
 
     // mark sync so "Last updated" nudges forward even with dummy data
     setLastAvailabilitySync(Date.now());
+    emit('bw:data:availabilitySync', Date.now());
     rankNudge();
     schedule();
   };

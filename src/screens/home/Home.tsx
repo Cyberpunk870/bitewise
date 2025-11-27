@@ -1,12 +1,5 @@
 // src/screens/home/Home.tsx
-import React, {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../store/cart';
 import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
@@ -23,12 +16,33 @@ import {
 import { usePermDecision, setPermPolicy, allowForThisSession, decidePerm } from '../../lib/permPrefs';
 import { emit } from '../../lib/events';
 import { nearestSavedTo, rememberActiveProfileAddress } from '../../lib/addressBook'; // ← NEW
+import { listActiveThemes, resolveSeasonalTheme, type SeasonalTheme } from '../../lib/seasonalThemes';
+import { fetchThemesPublic, trackThemeEvent } from '../../lib/api';
+import { setActiveProfileFields } from '../../lib/profileStore';
 const AppHeader = React.lazy(() => import('../../components/AppHeader'));
-const FirstTimeGuide = React.lazy(() => import('../../components/FirstTimeGuide'));
 const DishGrid = React.lazy(() => import('./HomeDishGrid'));
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
+
+function applyNearestSwitch(coords: { lat: number; lng: number }): boolean {
+  const { addr, meters } = nearestSavedTo(coords);
+  if (!addr || meters == null) return false;
+  if (meters <= DISTANCE_THRESHOLD_M) {
+    setActiveProfileFields({
+      addressLine: addr.addressLine,
+      addressLabel: addr.label,
+      lat: addr.lat,
+      lng: addr.lng,
+    });
+    rememberActiveProfileAddress();
+    try {
+      window.dispatchEvent(new Event('bw:profile:update'));
+    } catch {}
+    return true;
+  }
+  return false;
+}
 
 /** --- NEW: prompt suppression (prevents loop after “Update address”) --- */
 const SUPPRESS_KEY = 'bw.locationPrompt.suppressUntil';
@@ -75,66 +89,14 @@ export default function Home() {
   const [filters, setFilters] = useState<FilterState>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLocModalOpen, setLocModalOpen] = useState(false);
-  const [showGuide, setShowGuide] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('bw.guide.done') !== '1';
-    } catch {
-      return true;
-    }
-  });
   const [profile, setProfile] = useState(() => getActiveProfile());
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [labelSuggestion, setLabelSuggestion] = useState<string>('Home');
   const QUICK_LABELS = ['Home', 'Work', 'PG', 'Parents', 'Friend'];
+  const [theme, setTheme] = useState<SeasonalTheme | null>(() => resolveSeasonalTheme());
+  const [themes, setThemes] = useState<SeasonalTheme[]>(() => listActiveThemes());
+  const [themeIndex, setThemeIndex] = useState(0);
 
-  const dismissGuide = useCallback(() => {
-    setShowGuide(false);
-    try {
-      localStorage.setItem('bw.guide.done', '1');
-    } catch {}
-  }, []);
-
-  const guideAction = useCallback(
-    (action: string) => {
-      if (action === 'compare') {
-        nav('/availability');
-        return;
-      }
-      if (action === 'missions') {
-        nav('/tasks');
-        return;
-      }
-      if (action === 'cart-focus') {
-        const el = document.getElementById('home-dish-grid');
-        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    },
-    [nav]
-  );
-  const tourSteps = useMemo(
-    () => [
-      {
-        id: 'search',
-        title: 'Search any craving',
-        body: 'Use search or voice to jump straight to your favourite dishes.',
-      },
-      {
-        id: 'add',
-        title: 'Add dishes to compare',
-        body: 'Tap a card to add it to your cart. Two dishes are enough to start comparing.',
-        actionLabel: 'See dishes',
-        action: 'cart-focus',
-      },
-      {
-        id: 'compare',
-        title: 'Find the cheapest platform',
-        body: 'Hit “Check availability” to see Swiggy vs Zomato pricing before you order.',
-        actionLabel: 'Open compare',
-        action: 'compare',
-      },
-    ],
-    []
-  );
   useEffect(() => {
     const refresh = () => setProfile(getActiveProfile());
     window.addEventListener('storage', refresh);
@@ -179,6 +141,58 @@ export default function Home() {
       window.dispatchEvent(new CustomEvent('bw:dishes:names', { detail: names }));
     } catch {}
   }, []);
+
+  // Re-evaluate seasonal theme every 6h
+  useEffect(() => {
+    const tick = () => {
+      const active = listActiveThemes();
+      setThemes(active);
+      setTheme(resolveSeasonalTheme());
+      if (active.length === 0) setThemeIndex(0);
+      if (active.length > 0 && themeIndex >= active.length) setThemeIndex(0);
+    };
+    tick();
+    const id = window.setInterval(tick, 6 * 60 * 60 * 1000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch remote themes (admin-managed) with fallback to static
+  useEffect(() => {
+    let alive = true;
+    fetchThemesPublic()
+      .then((data) => {
+        if (!alive) return;
+        if (Array.isArray(data) && data.length) {
+          setThemes(data as SeasonalTheme[]);
+          setTheme(data[0] as SeasonalTheme);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Light auto-rotate through active themes if more than one is active.
+  useEffect(() => {
+    if (themes.length <= 1) return;
+    const id = window.setInterval(() => {
+      setThemeIndex((i) => (i + 1) % themes.length);
+    }, 7000);
+    return () => window.clearInterval(id);
+  }, [themes.length]);
+
+  const currentTheme = themes.length ? themes[themeIndex % themes.length] : theme;
+
+  // Track impression once per theme
+  const seenThemes = React.useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!currentTheme?.name) return;
+    if (seenThemes.current.has(currentTheme.name)) return;
+    seenThemes.current.add(currentTheme.name);
+    trackThemeEvent(currentTheme.name, 'impression');
+  }, [currentTheme?.name]);
 
   // ❌ Remove the older hard-coded redirect to location wizard on this flag.
   // (AppShell now routes to the correct first-needed permission.)
@@ -239,13 +253,16 @@ export default function Home() {
 
         // Prefer nearest among all saved addresses
         const { meters } = nearestSavedTo(newLive);
-        if (typeof meters === 'number' && meters <= (SAME_LOCATION_THRESHOLD_M || 100)) {
-          // within 100m -> silently prefer, do nothing
-          return;
-        }
-        if (typeof meters === 'number' && meters < DISTANCE_THRESHOLD_M) {
-          // between 100 and 300m → still skip prompt
-          return;
+        if (typeof meters === 'number') {
+          // Auto-switch to nearest saved if within 300 m (even if >100 m)
+          if (applyNearestSwitch(newLive)) {
+            setLocationKey(`auto:${Date.now()}`);
+            return;
+          }
+          if (meters < DISTANCE_THRESHOLD_M) {
+            // between 100 and 300m but no switch (unlikely) → keep silent
+            return;
+          }
         }
 
         // 300m+ → prompt
@@ -265,30 +282,30 @@ export default function Home() {
     const onVisible = () => { if (document.visibilityState === 'visible') run('visible'); };
     const onPermRecheck = () => run('perm-recheck');
 
-    const onBackendLive = (e: CustomEvent<{ lat: number; lng: number }>) => {
-      if (cancelled || locPerm !== 'allow' || isPromptSuppressed()) return;
-      const coords = e.detail;
-      if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return;
+      const onBackendLive = (e: CustomEvent<{ lat: number; lng: number }>) => {
+        if (cancelled || locPerm !== 'allow' || isPromptSuppressed()) return;
+        const coords = e.detail;
+        if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return;
 
-      const { meters } = nearestSavedTo(coords);
-      if (typeof meters === 'number') {
-        if (meters <= (SAME_LOCATION_THRESHOLD_M || 100)) {
-          // within 100m of a saved address → do nothing (silently prefer saved)
+        const { meters } = nearestSavedTo(coords);
+        if (applyNearestSwitch(coords)) {
+          setLocationKey(`auto:${Date.now()}`);
           return;
         }
-        if (meters >= DISTANCE_THRESHOLD_M) {
+        if (typeof meters === 'number') {
+          if (meters >= DISTANCE_THRESHOLD_M) {
+            live.current = coords;
+            setActLabel(`${Math.round(meters)} m`);
+            setLocModalOpen(true);
+            openLabelPrompt();
+          }
+        } else {
+          // no saved addresses → behave like before
           live.current = coords;
-          setActLabel(`${Math.round(meters)} m`);
+          setActLabel('New position');
           setLocModalOpen(true);
           openLabelPrompt();
         }
-      } else {
-        // no saved addresses → behave like before
-        live.current = coords;
-        setActLabel('New position');
-        setLocModalOpen(true);
-        openLabelPrompt();
-      }
     };
 
     const onProfileUpdate = () => {
@@ -364,6 +381,41 @@ export default function Home() {
         <Suspense fallback={<div className="h-32 w-full animate-pulse rounded-2xl bg-white/5" />}>
           <AppHeader />
         </Suspense>
+
+        {currentTheme && (
+          <div
+            className="mt-4 rounded-2xl p-4 shadow border border-white/10"
+            style={{ background: currentTheme.gradient }}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <div className="text-sm uppercase tracking-[0.2em] text-white/70">
+                  {currentTheme.name}
+                </div>
+                <div className="text-2xl font-extrabold">{currentTheme.heroTitle}</div>
+                <div className="text-sm text-white/80">{currentTheme.heroSubtitle}</div>
+                {currentTheme.promo ? (
+                  <div className="mt-2 text-sm text-white/85">
+                    <div className="font-semibold">{currentTheme.promo.title}</div>
+                    {currentTheme.promo.body ? <div className="text-white/80">{currentTheme.promo.body}</div> : null}
+                  </div>
+                ) : null}
+              </div>
+              {currentTheme.promo?.href ? (
+                <button
+                  onClick={() => {
+                    if (currentTheme?.name) trackThemeEvent(currentTheme.name, 'click');
+                    nav(currentTheme.promo!.href!);
+                  }}
+                  className="mt-2 sm:mt-0 px-4 py-2 rounded-xl font-semibold text-black"
+                  style={{ backgroundColor: currentTheme.accent }}
+                >
+                  {currentTheme.promo.ctaLabel || 'View offers'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="mt-4 flex gap-2">
@@ -544,11 +596,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-      )}
-      {showGuide && (
-        <Suspense fallback={null}>
-          <FirstTimeGuide steps={tourSteps} onDismiss={dismissGuide} onAction={guideAction} />
-        </Suspense>
       )}
     </main>
   );

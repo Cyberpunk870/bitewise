@@ -31,9 +31,13 @@ import leaderboard from "./backend-api/leaderboard";
 import achievements from "./backend-api/achievements";
 import tasks from "./backend-api/tasks";
 import ingest from "./backend-api/ingest";
+import actowiz from "./backend-api/actowiz";
+import metricsIngest from "./backend-api/metricsIngest";
+import referral from "./backend-api/referral";
 import analytics from "./backend-api/analytics";
 import missions from "./backend-api/missions";
-import { verifyAuth } from "./middleware/verifyAuth";
+import themesRouter, { adminThemesRouter } from "./backend-api/themes";
+import { verifyAuth, requireAdminAccess } from "./middleware/verifyAuth";
 import logger from "./lib/logger";
 import { metricsContentType, renderMetrics, metricsTimer, observeApi } from "./lib/metrics";
 import { ensureAdmin } from "./lib/firebaseAdmin";
@@ -42,6 +46,13 @@ import webauthnRouter from "./backend-api/webauthn";
 const log = logger.child({ module: "app" });
 
 log.info("module loading…");
+
+// Pre-warm firebase-admin on cold start to trim first-request latency.
+try {
+  ensureAdmin();
+} catch (e) {
+  log.warn({ err: e }, "pre-warm ensureAdmin failed (will retry lazily)");
+}
 
 /* -------------------- Middleware -------------------- */
 function ensureAdminMiddleware(_req: Request, _res: Response, next: NextFunction) {
@@ -70,14 +81,7 @@ const allowedOrigins = Array.from(
 
 function isAllowedOrigin(origin?: string | null) {
   if (!origin) return true;
-  if (allowedOrigins.includes(origin)) return true;
-  try {
-    const url = new URL(origin);
-    if (url.hostname.endsWith(".vercel.app")) return true;
-  } catch {
-    // fall through to reject
-  }
-  return false;
+  return allowedOrigins.includes(origin);
 }
 
 app.use(
@@ -132,7 +136,7 @@ app.get("/api/debug/token", async (req, res) => {
       return res.status(400).json({ ok: false, error: "no bearer token" });
     }
     ensureAdmin();
-    const timeoutMs = 8000;
+    const timeoutMs = 5000;
     const decoded = await Promise.race([
       getAdminAuth().verifyIdToken(match[1], true),
       new Promise((_r, rej) => setTimeout(() => rej(new Error("verifyIdToken timeout")), timeoutMs)),
@@ -143,6 +147,9 @@ app.get("/api/debug/token", async (req, res) => {
     return res.status(401).json({ ok: false, error: err?.message || "verify failed" });
   }
 });
+
+/* -------------------- Public Actowiz feed proxy -------------------- */
+app.use("/api/actowiz", ensureAdminMiddleware, actowiz);
 
 /* -------------------- Auth Mint Token -------------------- */
 app.post("/api/auth/mintCustomToken", async (req, res) => {
@@ -256,6 +263,11 @@ const secureChain: Array<(req: Request, res: Response, next: NextFunction) => vo
   ensureAdminMiddleware,
   verifyAuth,
 ];
+const adminChain: Array<(req: Request, res: Response, next: NextFunction) => void> = [
+  ensureAdminMiddleware,
+  verifyAuth,
+  requireAdminAccess,
+];
 
 /* -------------------- Secure routes -------------------- */
 app.use("/api/user", ...secureChain, userRoutes);
@@ -264,13 +276,17 @@ app.use("/api/leaderboard", ...secureChain, leaderboard);
 app.use("/api/achievements", ...secureChain, achievements);
 app.use("/api/missions", ...secureChain, missions);
 app.use("/api/tasks", ...secureChain, tasks);
+app.use("/api/referral", ...secureChain, referral);
 app.use("/api/ingest", ...secureChain, ingest);
-app.use("/api/analytics", ...secureChain, analytics);
+app.use("/api/metrics/ingest", metricsIngest);
+app.use("/api/analytics", ...adminChain, analytics);
+app.use("/api/themes", themesRouter);
+app.use("/api/admin/themes", ...adminChain, adminThemesRouter);
 
 /* -------------------- Push Registration -------------------- */
 app.post("/api/push/register", ...secureChain, async (req, res) => {
   try {
-    const uid = (req as any).uid;
+    const uid = (req as any).user?.uid || (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     const token = String(req.body?.token || "").trim();
     if (!token) return res.status(400).json({ ok: false, error: "token required" });
@@ -292,7 +308,7 @@ app.post("/api/push/register", ...secureChain, async (req, res) => {
 
 app.post("/api/push/sendTest", ...secureChain, async (req, res) => {
   try {
-    const uid = (req as any).uid;
+    const uid = (req as any).user?.uid || (req as any).uid;
     if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
     const db = getFirestore();
     const snap = await db
@@ -309,16 +325,141 @@ app.post("/api/push/sendTest", ...secureChain, async (req, res) => {
 
     const title = String(req.body?.title || "BiteWise");
     const body = String(req.body?.body || "Push notifications are live!");
-    await getMessaging().sendEachForMulticast({
+    const resp = await getMessaging().sendEachForMulticast({
       tokens,
       notification: { title, body },
     });
 
-    res.json({ ok: true, sent: tokens.length });
+    // Clean up invalid tokens
+    const failures: string[] = [];
+    resp.responses.forEach((r, idx) => {
+      if (!r.success) {
+        const code = (r.error as any)?.code || "";
+        if (code.includes("registration-token-not-registered") || code.includes("invalid-argument")) {
+          failures.push(tokens[idx]);
+        }
+      }
+    });
+    if (failures.length) {
+      const batch = getFirestore().batch();
+      failures.forEach((t) => {
+        const ref = getFirestore().collection("users").doc(uid).collection("devices").doc(t);
+        batch.delete(ref);
+      });
+      await batch.commit().catch((e) => log.warn({ e, failures }, "push cleanup failed"));
+    }
+
+    res.json({ ok: true, sent: tokens.length, pruned: failures.length });
   } catch (err: any) {
     log.error({ err }, "push/sendTest error");
     res.status(500).json({ ok: false, error: err?.message || "internal error" });
   }
+});
+
+app.get("/api/push/status", ...secureChain, async (req, res) => {
+  try {
+    const uid = (req as any).user?.uid || (req as any).uid;
+    if (!uid) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const db = getFirestore();
+    const snap = await db.collection("users").doc(uid).collection("devices").get();
+    const now = Date.now();
+    const stale: string[] = [];
+    snap.docs.forEach((d) => {
+      const data = d.data() as any;
+      const ts = Date.parse(data?.updated_at || "");
+      if (!ts || now - ts > 60 * 24 * 60 * 60 * 1000) {
+        stale.push(d.id);
+      }
+    });
+    if (stale.length) {
+      const batch = db.batch();
+      stale.forEach((id) => batch.delete(db.collection("users").doc(uid).collection("devices").doc(id)));
+      await batch.commit().catch((e) => log.warn({ e, stale }, "push stale cleanup failed"));
+    }
+    const active = snap.docs.length - stale.length;
+    return res.json({ ok: true, registered: active > 0, count: active });
+  } catch (err: any) {
+    log.error({ err }, "push/status error");
+    return res.status(500).json({ ok: false, error: "internal error" });
+  }
+});
+
+// Admin: cleanup stale push tokens across users (best-effort, limited scan)
+app.post("/api/admin/push/cleanup", ...adminChain, async (_req, res) => {
+  try {
+    const db = getFirestore();
+    const usersSnap = await db.collection("users").limit(500).get();
+    let checkedUsers = 0;
+    let removed = 0;
+    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    for (const userDoc of usersSnap.docs) {
+      checkedUsers++;
+      const devicesSnap = await db.collection("users").doc(userDoc.id).collection("devices").get();
+      const batch = db.batch();
+      let localRemovals = 0;
+      devicesSnap.forEach((d) => {
+        const ts = Date.parse(String((d.data() as any)?.updated_at || ""));
+        if (!ts || ts < cutoff) {
+          batch.delete(d.ref);
+          localRemovals++;
+        }
+      });
+      if (localRemovals > 0) {
+        await batch.commit().catch((e) => log.warn({ e }, "push cleanup batch failed"));
+        removed += localRemovals;
+      }
+    }
+    log.info({ checkedUsers, removed }, "admin push cleanup completed");
+    res.json({ ok: true, checkedUsers, removed });
+  } catch (err: any) {
+    log.error({ err }, "admin push cleanup failed");
+    res.status(500).json({ ok: false, error: err?.message || "internal error" });
+  }
+});
+
+// Cron-safe endpoint (e.g., Vercel Scheduled) using ADMIN_SHARED_SECRET
+app.post("/api/cron/push/cleanup", async (req, res) => {
+  try {
+    const secret = process.env.ADMIN_SHARED_SECRET;
+    const header = req.headers["x-admin-secret"];
+    if (!secret || header !== secret) {
+      return res.status(401).json({ ok: false, error: "unauthorized" });
+    }
+    const db = getFirestore();
+    const usersSnap = await db.collection("users").limit(500).get();
+    let checkedUsers = 0;
+    let removed = 0;
+    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    for (const userDoc of usersSnap.docs) {
+      checkedUsers++;
+      const devicesSnap = await db.collection("users").doc(userDoc.id).collection("devices").get();
+      const batch = db.batch();
+      let localRemovals = 0;
+      devicesSnap.forEach((d) => {
+        const ts = Date.parse(String((d.data() as any)?.updated_at || ""));
+        if (!ts || ts < cutoff) {
+          batch.delete(d.ref);
+          localRemovals++;
+        }
+      });
+      if (localRemovals > 0) {
+        await batch.commit().catch((e) => log.warn({ e }, "push cleanup batch failed"));
+        removed += localRemovals;
+      }
+    }
+    log.info({ checkedUsers, removed }, "cron push cleanup completed");
+    res.json({ ok: true, checkedUsers, removed });
+  } catch (err: any) {
+    log.error({ err }, "cron push cleanup failed");
+    res.status(500).json({ ok: false, error: err?.message || "internal error" });
+  }
+});
+
+/* -------------------- Admin helpers -------------------- */
+app.get("/api/admin/ping", ...adminChain, (req, res) => {
+  const uid = (req as any).user?.uid || "admin";
+  const method = (req as any).auth?.admin ? "claim" : "secret";
+  res.json({ ok: true, uid, method });
 });
 
 log.info("module loaded.");

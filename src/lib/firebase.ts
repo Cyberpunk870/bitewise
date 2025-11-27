@@ -354,5 +354,18 @@ Promise<User | null> {
 // keep existing alias used in your codebase
 export { confirmOtp as confirmPhoneCode };
 
-// quick dev handle
-try { (window as any).bwAuth = auth; } catch {}
+// quick dev handle + debug helper exposed on window for console use
+if (typeof window !== "undefined") {
+  try {
+    (window as any).bwAuth = auth;
+    (window as any).__bwGetIdToken = async () => {
+      try {
+        return await auth.currentUser?.getIdToken();
+      } catch {
+        return null;
+      }
+    };
+  } catch {
+    /* ignore */
+  }
+}

@@ -1,5 +1,5 @@
 // src/screens/availability/Availability.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AVAILABILITY_DUMMY,
@@ -17,6 +17,8 @@ import { addNotice } from '../../lib/notifications';
 import { getLastAvailabilitySync, timeAgo } from '../../lib/dataSync';
 import { getActiveCoords } from '../../lib/profileStore';
 import * as loc from '../../lib/location';
+import { useWatchlist, toggleWatch, isWatched } from '../../store/watchlist';
+import { markTtfRender, markDataEmpty, markDataError } from '../../lib/metricsClient';
 
 /* ---------- helpers & small atoms ---------- */
 
@@ -82,6 +84,7 @@ function RotatingDishImage({
     <img
       src={urls[idx]}
       alt={safeAlt}
+      loading="lazy"
       className="w-full h-40 object-cover"
       onError={(e) => {
         const el = e.currentTarget as HTMLImageElement;
@@ -123,6 +126,54 @@ function Tile({
     window.open(breakdown, '_blank', 'noopener');
   };
 
+  const SwiggyIcon = () => (
+    <svg
+      aria-hidden
+      viewBox="0 0 64 64"
+      className="w-5 h-5 rounded-md"
+      role="img"
+    >
+      <defs>
+        <linearGradient id="swg" x1="0%" x2="100%">
+          <stop offset="0%" stopColor="#ff7a30" />
+          <stop offset="100%" stopColor="#ff4f12" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#swg)" />
+      <path
+        d="M34 8c7 0 12 5.1 12 12 0 6-4.2 11-9.8 11.9L36 40c0 1-.8 1.9-1.9 1.9H30c-1.1 0-1.9-.9-1.9-1.9L28.6 32H24c-1.1 0-2-.9-2-2V20c0-6.9 5.1-12 12-12z"
+        fill="#fff"
+      />
+    </svg>
+  );
+
+  const ZomatoIcon = () => (
+    <svg
+      aria-hidden
+      viewBox="0 0 64 64"
+      className="w-5 h-5 rounded-md"
+      role="img"
+    >
+      <rect x="2" y="2" width="60" height="60" rx="10" fill="#d4323a" />
+      <text
+        x="32"
+        y="38"
+        textAnchor="middle"
+        fontFamily="Inter, system-ui, sans-serif"
+        fontSize="18"
+        fontWeight="700"
+        fill="#fff"
+      >
+        zomato
+      </text>
+    </svg>
+  );
+
+  const isLoved = useWatchlist((s) =>
+    s.isWatched(String((r as any).id), 'restaurant')
+  );
+  const toggle = useWatchlist((s) => s.toggle);
+
   return (
     <div className="relative rounded-2xl border border-white/15 bg-white/10 text-white overflow-hidden backdrop-blur">
       <RotatingDishImage
@@ -156,9 +207,36 @@ function Tile({
       </div>
 
       <div className="absolute right-3 top-3 flex gap-2">
+        <button
+          className={`text-xs px-2 py-1 rounded-full border ${
+            isLoved ? 'bg-yellow-300 text-slate-900 border-yellow-200' : 'bg-slate-900/80 border-white/20 text-white'
+          }`}
+          style={{ outline: 'none' }}
+          onClick={() =>
+            toggle({
+              id: String((r as any).id),
+              name: r.name,
+              kind: 'restaurant',
+            })
+          }
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggle({
+                id: String((r as any).id),
+                name: r.name,
+                kind: 'restaurant',
+              });
+            }
+          }}
+          aria-label={isLoved ? 'Unwatch' : 'Watch'}
+          title={isLoved ? 'Remove from watchlist' : 'Add to watchlist'}
+        >
+          {isLoved ? '★ Watching' : '☆ Watch'}
+        </button>
         {both ? (
           <button
-            className="text-xs px-3 py-1 rounded-full bg-white text-black font-semibold shadow"
+            className="text-xs px-3 py-1 rounded-full bg-gradient-to-r from-fuchsia-300 to-cyan-300 text-slate-900 font-semibold shadow-lg shadow-fuchsia-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
             onClick={() => onCompare(r)}
             aria-label={`Compare ${r.name}`}
           >
@@ -168,9 +246,11 @@ function Tile({
           availablePlatforms.map((platform) => (
             <button
               key={platform}
-              className="text-xs px-3 py-1 rounded-full bg-white/90 text-black font-semibold shadow"
+              className="text-xs px-3 py-1 rounded-full bg-white/90 text-slate-900 font-semibold shadow flex items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
               onClick={() => openPlatform(platform)}
+              aria-label={platform}
             >
+              {platform === 'swiggy' ? <SwiggyIcon /> : <ZomatoIcon />}
               {platform === 'swiggy' ? 'Swiggy' : 'Zomato'}
             </button>
           ))
@@ -209,6 +289,16 @@ function haversineMeters(
 
 export default function Availability() {
   const nav = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const t0Ref = useRef<number>(performance.now());
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setLoading(false);
+      markTtfRender('availability', performance.now() - t0Ref.current);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // gate for location
   const perm = usePermDecision('location'); // 'allow' | 'deny' | 'ask'
@@ -273,10 +363,18 @@ export default function Availability() {
       const ts = (e as CustomEvent<number>).detail || Date.now();
       setLastSyncTs(ts);
     };
+    const onError = () => {
+      addNotice({
+        kind: 'system',
+        title: 'Live data unavailable',
+        body: 'Showing cached results. Try refreshing.',
+      });
+    };
     window.addEventListener(
       'bw:data:availabilitySync' as any,
       onSync as any
     );
+    window.addEventListener('bw:data:availabilityError' as any, onError as any);
     return () =>
       window.removeEventListener(
         'bw:data:availabilitySync' as any,
@@ -442,8 +540,8 @@ export default function Availability() {
 
           {/* filters */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-            <div className="rounded-2xl border bg-white/80 p-3">
-              <div className="text-xs opacity-70 mb-1">
+            <div className="rounded-2xl border border-white/15 bg-white/90 text-slate-900 shadow-sm p-3">
+              <div className="text-xs font-semibold text-slate-700 mb-1">
                 Price ≤ ₹{priceMax}
               </div>
               <input
@@ -459,8 +557,8 @@ export default function Availability() {
               />
             </div>
 
-            <div className="rounded-2xl border bg-white/80 p-3">
-              <div className="text-xs opacity-70 mb-1">
+            <div className="rounded-2xl border border-white/15 bg-white/90 text-slate-900 shadow-sm p-3">
+              <div className="text-xs font-semibold text-slate-700 mb-1">
                 Rating ≥ {ratingMin.toFixed(1)}
               </div>
               <input
@@ -477,8 +575,8 @@ export default function Availability() {
               />
             </div>
 
-            <div className="rounded-2xl border bg-white/80 p-3">
-              <div className="text-xs opacity-70 mb-1">
+            <div className="rounded-2xl border border-white/15 bg-white/90 text-slate-900 shadow-sm p-3">
+              <div className="text-xs font-semibold text-slate-700 mb-1">
                 Distance ≤ {distanceMax} km
               </div>
               <input
@@ -497,14 +595,41 @@ export default function Availability() {
 
           {/* grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {rows.map(({ r, matches }) => (
-              <Tile
-                key={String((r as any).id)}
-                r={r}
-                matchedDishNames={matches as string[]}
-                onCompare={(row) => nav(`/compare/${String((row as any).id)}`)}
-              />
-            ))}
+            {loading
+              ? Array.from({ length: 6 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="animate-pulse rounded-2xl border border-white/10 bg-white/5 h-64"
+                  />
+                ))
+              : rows.length === 0
+              ? (
+                <>
+                  {markDataEmpty('availability')}
+                  <div className="col-span-2 text-center text-sm text-white/80 py-8">
+                    No matches with current filters.
+                    <button
+                      className="ml-2 px-3 py-1.5 rounded-full border border-white/30 bg-white/10 hover:bg-white/20 transition"
+                      onClick={() => {
+                        setPriceMax(1500);
+                        setRatingMin(0);
+                        setDistanceMax(20);
+                        setIgnoreCartFilter(true);
+                      }}
+                    >
+                      Reset filters
+                    </button>
+                  </div>
+                </>
+              )
+              : rows.map(({ r, matches }) => (
+                  <Tile
+                    key={String((r as any).id)}
+                    r={r}
+                    matchedDishNames={matches as string[]}
+                    onCompare={(row) => nav(`/compare/${String((row as any).id)}`)}
+                  />
+                ))}
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { addNotice } from '../notifications';
 import { setLastAvailabilitySync } from '../dataSync';
 import { emit } from '../events';
+import { getWatchlist } from '../../store/watchlist';
 
 type ActowizEvent =
   | { type: 'price_drop'; dish: string; newPrice: number; oldPrice?: number }
@@ -10,6 +11,28 @@ type ActowizEvent =
 export function startActowizFeed(opts: { apiBase: string; token?: string }) {
   let alive = true;
   let cursor = Number(localStorage.getItem('bw.actowiz.cursor') || 0);
+
+  function matchesWatchlist(ev: ActowizEvent): boolean {
+    const list = getWatchlist();
+    if (!list.length) return false;
+    const lc = (s: string) => s.toLowerCase();
+    if (ev.type === 'price_drop') {
+      const dish = lc(ev.dish);
+      return list.some(
+        (it) =>
+          (it.kind === 'dish' && lc(it.name) === dish) ||
+          (it.kind === 'restaurant' && lc(it.name) === lc(ev.dish))
+      );
+    }
+    if (ev.type === 'offer' || ev.type === 'eta_change') {
+      const text = ev.type === 'eta_change' ? ev.restaurant : ev.text;
+      const l = lc(text);
+      return list.some(
+        (it) => lc(it.name) === l || (it.kind === 'dish' && l.includes(lc(it.name)))
+      );
+    }
+    return false;
+  }
 
   async function poll() {
     if (!alive) return;
@@ -23,6 +46,7 @@ export function startActowizFeed(opts: { apiBase: string; token?: string }) {
       try { localStorage.setItem('bw.actowiz.cursor', String(cursor)); } catch {}
 
       for (const ev of data.items || []) {
+        const hitWatch = matchesWatchlist(ev as any);
         switch (ev.type) {
           case 'price_drop':
             addNotice({
@@ -38,12 +62,25 @@ export function startActowizFeed(opts: { apiBase: string; token?: string }) {
             addNotice({ kind: 'price', title: 'Faster delivery', body: `${ev.restaurant} ~${ev.newEtaMins} mins.` });
             break;
         }
+        if (hitWatch) {
+          addNotice({
+            kind: 'price',
+            title: 'On your watchlist',
+            body:
+              ev.type === 'price_drop'
+                ? `${ev.dish} just dropped to ₹${ev.newPrice}.`
+                : ev.type === 'offer'
+                ? `New offer: ${ev.text}`
+                : `${(ev as any).restaurant} updated.`,
+          });
+        }
       }
 
       // mark a successful sync moment (even if no events) so UI shows freshness
       setLastAvailabilitySync(Date.now());
       emit('bw:data:availability:tick', {}); // optional: any listeners
     } catch {
+      emit('bw:data:availabilityError', {});
       // simple backoff
       await new Promise(r => setTimeout(r, 5000));
     } finally {

@@ -2,11 +2,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAnalyticsSummary } from '../../lib/api';
+import { getAuth } from 'firebase/auth';
 
 type SummaryResponse = {
   ok: true;
   range: { days: number; since: number; until: number };
   totals: Record<string, number>;
+  categories?: Record<string, number>;
   timeline: Array<{ date: string; total: number }>;
   sample: number;
 };
@@ -19,6 +21,7 @@ export default function AnalyticsDashboard() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -48,6 +51,15 @@ export default function AnalyticsDashboard() {
     return Object.values(summary.totals).reduce((acc, val) => acc + val, 0);
   }, [summary]);
 
+  const errorCount = useMemo(() => {
+    if (!summary) return 0;
+    return Object.entries(summary.totals).reduce((acc, [name, count]) => {
+      const n = name.toLowerCase();
+      if (n.includes("error") || n.includes("timeout") || n.includes("failed")) return acc + count;
+      return acc;
+    }, 0);
+  }, [summary]);
+
   return (
     <main className="min-h-screen px-4 py-6 text-white">
       <div className="max-w-5xl mx-auto space-y-5">
@@ -62,8 +74,48 @@ export default function AnalyticsDashboard() {
             <h1 className="text-lg font-semibold">Analytics Dashboard</h1>
             <p className="text-xs text-white/60">Events captured via /api/ingest</p>
           </div>
-          <div className="w-24 text-right text-sm text-white/70">
-            {summary ? `${summary.sample} events` : ''}
+          <div className="flex items-center gap-2">
+            <div className="w-24 text-right text-sm text-white/70">
+              {summary ? `${summary.sample} events` : ''}
+            </div>
+            <button
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  // Prefer admin secret header; fallback to bearer if the UI sets it globally.
+                  const headers: Record<string, string> = {};
+                  const secret = localStorage.getItem('admin.secret') || '';
+                  if (secret) headers['x-admin-secret'] = secret;
+                  // If no secret, try bearer token (admin claim)
+                  if (!secret) {
+                    const user = getAuth().currentUser;
+                    if (user) {
+                      const token = await user.getIdToken();
+                      headers['Authorization'] = `Bearer ${token}`;
+                    }
+                  }
+                  const res = await fetch(`/api/analytics/export?days=${days}`, { headers, credentials: 'include' });
+                  if (!res.ok) throw new Error('export failed');
+                  const blob = await res.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `analytics-${days}d.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  window.URL.revokeObjectURL(url);
+                } catch (err: any) {
+                  setError(err?.message || 'Export failed');
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              className="px-3 py-1.5 text-sm rounded-full border border-white/20 bg-white/10 hover:bg-white/20 transition disabled:opacity-50"
+            >
+              {exporting ? 'Exporting…' : 'Download CSV'}
+            </button>
           </div>
         </header>
 
@@ -94,6 +146,20 @@ export default function AnalyticsDashboard() {
                 <p className="text-xs uppercase tracking-[0.3em] text-white/60">All events</p>
                 <p className="text-3xl font-semibold mt-2">{totalEvents}</p>
               </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-white/60">Errors / timeouts</p>
+                <p className="text-2xl font-semibold mt-2">{errorCount}</p>
+              </div>
+              {summary.categories
+                ? Object.entries(summary.categories)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, count]) => (
+                      <div key={name} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-white/60">{name}</p>
+                        <p className="text-2xl font-semibold mt-2">{count}</p>
+                      </div>
+                    ))
+                : null}
               {Object.entries(summary.totals)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 4)

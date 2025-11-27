@@ -1,9 +1,10 @@
 /* global importScripts */
 // Primary service worker for BiteWise PWA: handles offline shell + messaging.
+// Version: v3
 importScripts('/firebase-messaging-sw.js');
 
 const CACHE_PREFIX = 'bitewise-shell';
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const APP_CACHE = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const APP_SHELL = [
   '/',
@@ -31,6 +32,18 @@ self.addEventListener('activate', (event) => {
       )
     ).then(() => self.clients.claim())
   );
+  event.waitUntil(
+    (async () => {
+      const allClients = await self.clients.matchAll({ includeUncontrolled: true });
+      allClients.forEach((client) => client.postMessage({ type: 'SW_UPDATED', version: CACHE_VERSION }));
+    })()
+  );
+});
+
+self.addEventListener('message', (event) => {
+  if (event?.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', (event) => {

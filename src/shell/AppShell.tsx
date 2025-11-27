@@ -9,10 +9,17 @@ import { clearSessionPerms, decidePerm } from '../lib/permPrefs';
 import { setLastRoute, getActivePhone, getLastRoute } from '../lib/profileStore';
 import { emit, on } from '../lib/events';
 import { ensureFirebaseBoot } from '../lib/firebaseBoot';
+import { toast } from '../store/toast';
+import TourOverlay from '../components/TourOverlay';
+import { useTour, shouldAutoStartTour } from '../store/tour';
+import TourOverlay from '../components/TourOverlay';
+import { useTour, shouldAutoStartTour } from '../store/tour';
 const lazyCloud = () => import('../lib/cloudProfile');
 const lazyTokens = () => import('../lib/tokens');
 const lazyNotify = () => import('../lib/notify');
 const lazyReturn = () => import('../lib/orderReturn');
+import SavingsBar from '../components/SavingsBar';
+import NotificationsToggle from '../components/NotificationsToggle';
 let authMod: Promise<typeof import('firebase/auth')> | null = null;
 const loadAuth = () => {
   if (!authMod) authMod = import('firebase/auth');
@@ -30,6 +37,7 @@ export default function AppShell() {
   const nav = useNavigate();
   const location = useLocation();
   const timerRef = useRef<number | null>(null);
+  const tour = useTour();
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -47,6 +55,33 @@ export default function AppShell() {
         }
       });
     }
+  }, []);
+
+  // Listen for SW update notifications and offer a one-click reload
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const data: any = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'SW_UPDATED') {
+        toast.success('BiteWise just updated', {
+          action: {
+            label: 'Reload',
+            onClick: () => {
+              navigator.serviceWorker
+                .getRegistration()
+                .then((reg) => {
+                  reg?.waiting?.postMessage({ type: 'SKIP_WAITING' });
+                  window.setTimeout(() => window.location.reload(), 150);
+                })
+                .catch(() => window.location.reload());
+            },
+          },
+        });
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   }, []);
 
   const hasActiveSession = () => {
@@ -387,6 +422,33 @@ export default function AppShell() {
     };
   }, []);
 
+  /* Auto-start guided tour once */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      // Only show tour when a session exists and we're in the main app (not onboarding/auth/unlock)
+      const path = location.pathname;
+      const inAuthFlow =
+        path.startsWith('/onboarding') ||
+        path.startsWith('/auth') ||
+        path === '/unlock';
+      if (inAuthFlow) return;
+      if (!hasActiveSession()) return;
+      if (!shouldAutoStartTour()) return;
+
+      tour.setSteps([
+        { id: 'addr', selector: '#nav-address', title: 'Your address', body: 'Quickly confirm or change your delivery address here.' },
+        { id: 'mic', selector: '#nav-mic', title: 'Voice search', body: 'Tap the mic to search by voice.' },
+        { id: 'cart', selector: '#nav-cart', title: 'Cart', body: 'View your items and checkout.' },
+        { id: 'bot', selector: '#yummibot-trigger', title: 'YummiBot', body: 'Chat for trending picks, favorites, and quick suggestions.' },
+        { id: 'menu', selector: '#nav-menu', title: 'Settings & security', body: 'Open the menu to reach settings, passkeys, notifications, referrals, and BiteCoins.' },
+      ]);
+      tour.start();
+    } catch {
+      // fail-safe: do nothing if tour cannot start
+    }
+  }, [tour, location.pathname]);
+
   return (
     <MissionStatsProvider>
       <div className="app-shell">
@@ -398,6 +460,9 @@ export default function AppShell() {
         <ConfettiBurst />
         <RewardHost />
         <ToastHost />
+        <TourOverlay />
+        <SavingsBar />
+        <NotificationsToggle />
         <Suspense fallback={null}>
           <ReturnBanner />
         </Suspense>

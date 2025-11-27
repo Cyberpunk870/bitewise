@@ -1,4 +1,5 @@
 import { getAuth } from "firebase/auth";
+import { resolveApiBase } from "./apiBase";
 
 export type AnalyticsEventName =
   | "login_success"
@@ -17,8 +18,7 @@ type EventInput = {
 const queue: Array<{ name: AnalyticsEventName; props?: Record<string, unknown>; ts: number }> = [];
 let flushTimer: number | null = null;
 let idleHandle: number | null = null;
-const API_BASE =
-  import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:3000/api" : "/api");
+const API_BASE = resolveApiBase();
 
 function scheduleFlush(delay = 1500) {
   if (flushTimer || idleHandle) return;

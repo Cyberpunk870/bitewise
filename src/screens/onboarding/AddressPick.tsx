@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import OnboardFrame from '../../components/OnboardFrame';
 import useOnboarding from '../../store/onboarding';
-import { loadGoogleMaps } from '../../lib/googleMaps';
 import { setActiveProfileFields } from '../../lib/profileStore';
 import { pushActiveToCloud } from '../../lib/cloudProfile';
 import { getAuth } from 'firebase/auth';                    // ✅ NEW
@@ -111,6 +110,7 @@ export default function AddressPick() {
   }, [input]);
 
   const reverseGeocode = useCallback(async (p: Coords) => {
+    const { loadGoogleMaps } = await import('../../lib/googleMaps');
     const g = await loadGoogleMaps();
     const geo = geocoderRef.current ?? new g.maps.Geocoder();
     return new Promise<string | undefined>((resolve) => {
@@ -183,6 +183,7 @@ export default function AddressPick() {
     let dragEndListener: google.maps.MapsEventListener | null = null;
 
     (async () => {
+      const { loadGoogleMaps } = await import('../../lib/googleMaps');
       const g = await loadGoogleMaps();
       mapsRef.current = g;
       if (!mounted || !mapEl.current) return;
