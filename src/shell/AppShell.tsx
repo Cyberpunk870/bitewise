@@ -14,7 +14,6 @@ import { toast } from '../store/toast';
 import { track } from '../lib/track';
 import TourOverlay from '../components/TourOverlay';
 import { useTour, shouldAutoStartTour } from '../store/tour';
-import { setSentryUser } from '../lib/sentry';
 import OfflineBanner from '../components/OfflineBanner';
 import OfflineTooltip from '../components/OfflineTooltip';
 const lazyCloud = () => import('../lib/cloudProfile');
@@ -129,25 +128,6 @@ export default function AppShell() {
       try { sessionStorage.setItem('bw.lastRoute', path); } catch {}
     }
   }, [location.pathname, location.search]);
-
-  /* Sync Sentry user with active session phone (or clear on logout) */
-  useEffect(() => {
-    const syncUser = () => {
-      try {
-        const phone = getActivePhone();
-        setSentryUser(phone || null);
-      } catch {
-        setSentryUser(null);
-      }
-    };
-    syncUser();
-    const off = on('bw:auth:changed', syncUser);
-    window.addEventListener('storage', syncUser);
-    return () => {
-      off();
-      window.removeEventListener('storage', syncUser);
-    };
-  }, []);
 
   /* Ensure Firebase is warmed up for onboarding/auth routes */
   useEffect(() => {

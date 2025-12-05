@@ -3,12 +3,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 import router from './router';
-import { Sentry, initSentry } from './lib/sentry';
 // Ensure Firebase is initialized before any feature (auth/api/missions) calls getAuth().
 import './lib/firebase';
 import './index.css';
-
-initSentry();
 
 const ErrorFallback = () => (
   <div className="min-h-dvh grid place-items-center bg-[#020617] text-white px-4">
@@ -27,8 +24,4 @@ const ErrorFallback = () => (
   </div>
 );
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
-    <RouterProvider router={router} />
-  </Sentry.ErrorBoundary>
-);
+ReactDOM.createRoot(document.getElementById('root')!).render(<RouterProvider router={router} />);

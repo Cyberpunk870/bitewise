@@ -13,6 +13,7 @@ import type { FuzzyDishMatch } from '../lib/fuzzyDish';
 import type { BotMessage as PanelMessage } from './YummiBotPanel';
 import { setActiveProfileFields } from '../lib/profileStore';
 const HeaderActions = React.lazy(() => import('./HeaderActions'));
+const LAST_APPLIED_ADDR_KEY = 'label|line|lat|lng';
 
 /* icons */
 function MicIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -146,64 +147,28 @@ export default function AppHeader() {
 
   /* profile */
   const [profile, setProfile] = useState(() => getActiveProfile());
-  const [activeAddr, setActiveAddr] = useState<{ label: string; line: string; lat?: number; lng?: number } | null>(() => {
-    try {
-      const raw = localStorage.getItem('bw.addresses');
-      if (!raw) return null;
-      const list = JSON.parse(raw) || [];
-      if (!Array.isArray(list) || !list.length) return null;
-      const pick = list.find((a: any) => a?.active) || list[0];
-      if (!pick) return null;
-      return {
-        label: pick.label || '',
-        line: pick.addressLine || '',
-        lat: typeof pick.lat === 'number' ? pick.lat : undefined,
-        lng: typeof pick.lng === 'number' ? pick.lng : undefined,
-      };
-    } catch {
-      return null;
-    }
-  });
+  const [activeAddr, setActiveAddr] = useState<{ label: string; line: string; lat?: number; lng?: number } | null>(null);
+
   useEffect(() => {
     const refresh = () => setProfile(getActiveProfile());
-    const onAddresses = () => {
-      try {
-        const raw = localStorage.getItem('bw.addresses');
-        if (!raw) return;
-        const list = JSON.parse(raw) || [];
-        if (!Array.isArray(list) || !list.length) return;
-        const pick = list.find((a: any) => a?.active) || list[0];
-        if (!pick) return;
-        const next = {
-          label: pick.label || '',
-          line: pick.addressLine || '',
-          lat: typeof pick.lat === 'number' ? pick.lat : undefined,
-          lng: typeof pick.lng === 'number' ? pick.lng : undefined,
-        };
-        setActiveAddr(next);
-        // keep profile in sync so other screens see the same active address
-        setActiveProfileFields({
-          addressLabel: next.label || profile?.addressLabel,
-          addressLine: next.line || profile?.addressLine,
-          lat: typeof next.lat === 'number' ? next.lat : profile?.lat,
-          lng: typeof next.lng === 'number' ? next.lng : profile?.lng,
-        });
-      } catch {
-        /* ignore */
-      }
-    };
-    window.addEventListener('storage', refresh);
     window.addEventListener('bw:profile:update' as any, refresh as any);
-    window.addEventListener('storage', onAddresses);
-    window.addEventListener('bw:addresses:update' as any, onAddresses as any);
-    onAddresses();
     return () => {
-      window.removeEventListener('storage', refresh);
       window.removeEventListener('bw:profile:update' as any, refresh as any);
-      window.removeEventListener('storage', onAddresses);
-      window.removeEventListener('bw:addresses:update' as any, onAddresses as any);
     };
   }, []);
+
+  useEffect(() => {
+    if (!profile) {
+      setActiveAddr(null);
+      return;
+    }
+    setActiveAddr({
+      label: profile.addressLabel || '',
+      line: profile.addressLine || '',
+      lat: profile.lat,
+      lng: profile.lng,
+    });
+  }, [profile]);
   const name = profile?.name?.trim() ? profile.name : 'Guest';
   const addressLine = activeAddr?.line || profile?.addressLine || '';
   const addressLabel = activeAddr?.label || profile?.addressLabel || '';
