@@ -39,13 +39,13 @@ import missions from "./backend-api/missions";
 import themesRouter, { adminThemesRouter } from "./backend-api/themes";
 import feedbackRouter from "./backend-api/feedback";
 import { verifyAuth, requireAdminAccess } from "./middleware/verifyAuth";
-import menuIngestRouter from "./backend-api/menuIngest";
 import logger from "./lib/logger";
 import { metricsContentType, renderMetrics, metricsTimer, observeApi } from "./lib/metrics";
 import { ensureAdmin } from "./lib/firebaseAdmin";
 import webauthnRouter from "./backend-api/webauthn";
 import { initSentryServer, sentryRequestHandler, sentryErrorHandler, sentryCapture } from "./lib/sentryServer";
 import { validateServerEnv } from "./lib/envValidation";
+import menuIngestRouter from "./backend-api/menuIngest";
 
 const log = logger.child({ module: "app" });
 

@@ -71,13 +71,13 @@ const missions_1 = __importDefault(require("./backend-api/missions"));
 const themes_1 = __importStar(require("./backend-api/themes"));
 const feedback_1 = __importDefault(require("./backend-api/feedback"));
 const verifyAuth_1 = require("./middleware/verifyAuth");
-const menuIngest_1 = __importDefault(require("./backend-api/menuIngest"));
 const logger_1 = __importDefault(require("./lib/logger"));
 const metrics_1 = require("./lib/metrics");
 const firebaseAdmin_1 = require("./lib/firebaseAdmin");
 const webauthn_1 = __importDefault(require("./backend-api/webauthn"));
 const sentryServer_1 = require("./lib/sentryServer");
 const envValidation_1 = require("./lib/envValidation");
+const menuIngest_1 = __importDefault(require("./backend-api/menuIngest"));
 const log = logger_1.default.child({ module: "app" });
 log.info("module loading…");
 // Fail fast if required envs are missing (skips strict mode in tests)
