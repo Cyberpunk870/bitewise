@@ -375,7 +375,7 @@ export default function Home() {
 
   /* ----- UI ----- */
   return (
-    <main className="min-h-screen text-white pb-28 px-3">
+    <main className="min-h-screen text-white pb-32 px-3">
       <div className="max-w-4xl mx-auto w-full max-w-6xl px-3 pb-28">
         <Suspense fallback={<div className="h-32 w-full animate-pulse rounded-2xl bg-white/5" />}>
           <AppHeader />

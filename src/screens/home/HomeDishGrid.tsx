@@ -89,7 +89,7 @@ const DishCard = memo(function DishCard({
   return (
     <div
       className={[
-        'group relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-white shadow-lg shadow-black/30 p-3 transition',
+        'group relative w-full max-w-[360px] mx-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-white shadow-lg shadow-black/30 p-3 transition h-full',
         selected ? 'ring-2 ring-white/70' : '',
       ].join(' ')}
       role="button"
@@ -98,7 +98,7 @@ const DishCard = memo(function DishCard({
       style={{ contain: 'layout paint size', containIntrinsicSize: '300px 360px' } as any}
       onClick={onSelect}
     >
-      <div className="relative w-full rounded-xl overflow-hidden mb-2 aspect-[3/4] bg-white/5">
+      <div className="relative w-full rounded-xl overflow-hidden mb-2 aspect-[16/9] bg-white/5">
         <picture className="absolute inset-0 h-full w-full">
           {sources.avif && <source srcSet={sources.avif} type="image/avif" />}
           {sources.webp && <source srcSet={sources.webp} type="image/webp" />}
@@ -144,14 +144,16 @@ const DishCard = memo(function DishCard({
           </div>
         )}
       </div>
-      <p className="font-semibold text-white">{d.name}</p>
-      {d.cuisine ? <p className="text-sm text-white/70">{d.cuisine}</p> : null}
-      {typeof d.rating === 'number' && (
-        <p className="text-sm mt-1 flex items-center gap-2 text-white/80">
-          <span className="text-yellow-300"><Stars value={d.rating} /></span>
-          <span>{d.rating.toFixed(1)}</span>
-        </p>
-      )}
+      <div className="mt-1 space-y-1 min-h-[48px]">
+        <p className="font-semibold text-white leading-snug">{d.name}</p>
+        {d.cuisine ? <p className="text-sm text-white/70">{d.cuisine}</p> : null}
+        {typeof d.rating === 'number' && (
+          <p className="text-sm flex items-center gap-2 text-white/80">
+            <span className="text-yellow-300"><Stars value={d.rating} /></span>
+            <span>{d.rating.toFixed(1)}</span>
+          </p>
+        )}
+      </div>
     </div>
   );
 });
@@ -247,7 +249,10 @@ export default function HomeDishGrid({
 
   return (
     <>
-      <section id="home-dish-grid" className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <section
+        id="home-dish-grid"
+        className="mt-6 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] justify-items-center items-stretch"
+      >
         {limitedList.map((d, idx) => {
           const id = String(d.id);
           const qty = qtyOf(id);

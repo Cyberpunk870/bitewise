@@ -20,7 +20,7 @@ type Props = {
 
 export default function YummiBotPanel({ onClose, messages, typing, input, onInput, onSend, onSuggestion }: Props) {
   return (
-    <div className="fixed right-4 bottom-20 w-80 glass-card border border-white/10 p-4 backdrop-blur-lg z-50 shadow-2xl animate-fade-up" role="dialog" aria-label="YummiBot assistant">
+    <div className="fixed right-4 top-24 w-80 max-w-[calc(100vw-2rem)] glass-card z-30 animate-fade-up" role="dialog" aria-label="YummiBot assistant">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-white">
           <span role="img" aria-label="bot">
