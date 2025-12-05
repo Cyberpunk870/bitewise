@@ -1,0 +1,6 @@
+int drawable ic_site_settings 0x0
+int string app_name 0x0
+int string manage_space_no_data_toast 0x0
+int string manage_space_not_supported_toast 0x0
+int string no_provider_toast 0x0
+int string update_chrome_toast 0x0

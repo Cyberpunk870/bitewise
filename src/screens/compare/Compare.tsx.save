@@ -1,0 +1,172 @@
+// /src/screens/compare/Compare.tsx
+
+import React, { useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { AVAILABILITY_DUMMY } from '../../data/availability';
+import type { PriceBreakdown } from '../../data/availability';
+import useCart from '../../store/cart';
+import { useEffect } from 'react';
+import { emit } from '../../lib/events';
+
+type Column = PriceBreakdown & {
+  subtotal: number;
+  total: number;
+};
+
+function calcTotals(p: PriceBreakdown): { subtotal: number; total: number } {
+  const subtotal = p.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+  const fees = p.fees.packaging + p.fees.delivery + p.fees.platformFee + p.fees.tax;
+  const savings = p.promo?.savings ?? 0;
+  const total = Math.max(0, subtotal + fees - savings);
+  return { subtotal, total };
+}
+
+function Block({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border bg-white p-3 shadow-sm">
+      <div className="text-sm font-medium mb-2">{title}</div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function Money({ v }: { v: number }) {
+  return <span>₹{v.toFixed(2)}</span>;
+}
+
+export default function Compare() {
+  useEffect(() => { emit('bw:compare:opened', null); }, []);  const nav = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const { items } = useCart();
+
+  const restaurant = useMemo(
+    () => AVAILABILITY_DUMMY.find(r => String(r.id) === String(id)),
+    [id]
+  );
+
+  const columns: Column[] = useMemo(() => {
+    if (!restaurant?.priceBreakdown?.length) return [];
+    return restaurant.priceBreakdown.map(p => {
+      const { subtotal, total } = calcTotals(p);
+      return { ...p, subtotal, total };
+    });
+  }, [restaurant]);
+
+  const cheaper =
+    columns.length >= 2
+      ? columns[0].total < columns[1].total
+        ? columns[0].platform
+        : columns[1].platform
+      : columns[0]?.platform;
+
+  if (!restaurant) {
+    return (
+      <main className="min-h-screen bg-white">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <button className="px-3 py-1.5 text-sm rounded-full border mb-4" onClick={() => nav(-1)}>← Back</button>
+          <p>Restaurant not found.</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen pb-20">
+      <div className="max-w-4xl mx-auto w-full px-4 pt-6">
+        {/* header */}
+        <div className="flex items-center justify-between mb-3">
+          <button className="px-3 py-1.5 text-sm rounded-full border bg-white/80" onClick={() => nav(-1)}>← Back</button>
+          <h1 className="text-lg font-semibold text-white drop-shadow">Compare prices</h1>
+          <div className="w-20" />
+        </div>
+
+        <div className="rounded-2xl bg-white/80 backdrop-blur p-3 mb-3">
+          <div className="font-semibold">{restaurant.name}</div>
+          <div className="text-sm opacity-70">
+            Comparing {columns.length} platform{columns.length > 1 ? 's' : ''} • {items.length} selected item{items.length !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        {/* two columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {columns.map((c) => (
+            <div
+              key={c.platform}
+              className={[
+                'rounded-2xl bg-white p-4 shadow',
+                cheaper === c.platform ? 'ring-2 ring-emerald-500' : 'ring-1 ring-black/10',
+              ].join(' ')}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-base font-semibold capitalize">{c.platform}</div>
+                <div className="text-sm opacity-70">{c.etaMins} mins</div>
+              </div>
+
+              {/* items */}
+              <Block title="Items">
+                {c.items.map((it, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-sm">
+                    <div className="truncate">
+                      {it.name} <span className="opacity-60">× {it.qty}</span>
+                    </div>
+                    <Money v={it.unitPrice * it.qty} />
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-2 border-t">
+                  <div className="font-medium">Subtotal</div>
+                  <div className="font-medium"><Money v={c.subtotal} /></div>
+                </div>
+              </Block>
+
+              {/* fees + promo */}
+              <div className="grid grid-cols-2 gap-3 my-3">
+                <Block title="Fees">
+                  <div className="flex items-center justify-between text-sm"><span>Packaging</span><Money v={c.fees.packaging} /></div>
+                  <div className="flex items-center justify-between text-sm"><span>Delivery</span><Money v={c.fees.delivery} /></div>
+                  <div className="flex items-center justify-between text-sm"><span>Platform</span><Money v={c.fees.platformFee} /></div>
+                  <div className="flex items-center justify-between text-sm"><span>Taxes</span><Money v={c.fees.tax} /></div>
+                </Block>
+
+                <Block title="Promotions">
+                  {c.promo ? (
+                    <>
+                      <div className="text-sm">{c.promo.label}</div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Savings</span>
+                        <span>-<Money v={c.promo.savings} /></span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-sm opacity-60">No promo</div>
+                  )}
+                </Block>
+              </div>
+
+              {/* total */}
+              <div className="flex items-center justify-between border-t pt-3">
+                <div className="text-sm opacity-70">Total to pay</div>
+                <div className="text-lg font-semibold"><Money v={c.total} /></div>
+              </div>
+
+              <button
+                className={[
+                  'mt-3 w-full px-4 py-2 rounded-xl text-white',
+                  cheaper === c.platform ? 'bg-emerald-600' : 'bg-black',
+                ].join(' ')}
+                onClick={() => window.open(c.deepLink, '_blank')}
+              >
+                Order on {c.platform[0].toUpperCase() + c.platform.slice(1)}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {columns.length >= 2 && (
+          <div className="mt-4 text-sm text-white/90">
+            Tip: We highlight the cheaper option in green. (Dummy timings/fees for now; we’ll swap in Actowiz data later.)
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}

@@ -1,0 +1,6 @@
+# robots.txt
+User-agent: *
+Allow: /
+
+# Sitemaps (add if available)
+# Sitemap: https://www.bitewise.co.in/sitemap.xml

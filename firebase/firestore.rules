@@ -1,0 +1,72 @@
+// Placeholder; Admin SDK uses service account and ignores rules.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ----- Per-user root documents -----
+    match /users/{uid} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // saved_addresses
+    match /saved_addresses/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.user_id;
+    }
+
+    // order_events
+    match /order_events/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.user_id;
+    }
+
+    // achievements
+    match /achievements/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.user_id;
+    }
+
+    // coins_history
+    match /coins_history/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.user_id;
+    }
+
+    // leaderboard: read-only for all; server writes via Admin SDK
+    match /leaderboard/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // chat_messages
+    match /chat_messages/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.user_id;
+    }
+
+    // notifications
+    match /notifications/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.user_id;
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.user_id;
+    }
+
+    // feedback (stored by authenticated users; read/admin-only via backend)
+    match /feedback/{docId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow read, update, delete: if false; // only via Admin SDK
+    }
+  }
+}

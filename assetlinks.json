@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.bitewise_five.twa",
+        "sha256_cert_fingerprints": ["50:5C:AC:09:D2:DC:D8:33:D0:8F:C2:26:66:B0:15:D3:04:D2:72:E4:DC:AE:F9:6F:CB:67:BF:3B:75:75:93:D0"]
+      }
+    }]

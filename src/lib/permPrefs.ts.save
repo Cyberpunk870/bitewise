@@ -1,0 +1,122 @@
+// src/lib/permPrefs.ts
+
+// The three choices shown to users on each permission screen.
+export type PermPolicy = 'always' | 'session' | 'never';
+
+// The permissions we manage in onboarding.
+export type PermKey = 'location' | 'notifications' | 'mic';
+
+// Internal storage keys
+const LS_KEY = 'bw:permPrefs:v1';     // localStorage (persists across sessions)
+const SS_PREFIX = 'bw:permSess:';     // sessionStorage (clears on tab close)
+
+type Shape = Partial<Record<PermKey, PermPolicy>>;
+const ALL_KEYS: PermKey[] = ['location', 'notifications', 'mic'];
+
+/* ------------------------- storage helpers ------------------------- */
+
+function safeParse<T>(raw: string | null): T | undefined {
+  if (!raw) return undefined;
+  try { return JSON.parse(raw) as T; } catch { return undefined; }
+}
+
+function loadLS(): Shape {
+  try {
+    return safeParse<Shape>(localStorage.getItem(LS_KEY)) || {};
+  } catch { return {}; }
+}
+
+function saveLS(next: Shape) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(next));
+  } catch { /* ignore write errors (private mode, quota, etc.) */ }
+}
+
+function setSS(key: PermKey, on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(SS_PREFIX + key, '1');
+    else sessionStorage.removeItem(SS_PREFIX + key);
+  } catch { /* ignore */ }
+}
+
+function hasSS(key: PermKey): boolean {
+  try {
+    return !!sessionStorage.getItem(SS_PREFIX + key);
+  } catch { return false; }
+}
+
+/* ------------------------------- API -------------------------------- */
+
+/**
+ * Read the current policy for a permission.
+ * - Returns 'always' / 'never' if persisted in localStorage
+ * - Returns 'session' if a session-only choice is active in this tab
+ * - Returns undefined if no choice stored (should ask)
+ */
+export function getPermPolicy(key: PermKey): PermPolicy | undefined {
+  if (hasSS(key)) return 'session';
+  const ls = loadLS();
+  return ls[key];
+}
+
+/**
+ * Set the policy for a permission.
+ * - 'always' and 'never' persist in localStorage
+ * - 'session' is stored in sessionStorage only (cleared when tab closes)
+ */
+export function setPermPolicy(key: PermKey, value: PermPolicy): void {
+  const ls = loadLS();
+
+  if (value === 'session') {
+    // Clear any persistent choice and mark session-only.
+    delete ls[key];
+    saveLS(ls);
+    setSS(key, true);
+    return;
+  }
+
+  // Persist 'always' or 'never' and clear any previous session flag.
+  ls[key] = value;
+  saveLS(ls);
+  setSS(key, false);
+}
+
+/** Clear the saved policy for a single permission key. */
+export function clearPermPolicy(key: PermKey): void {
+  const ls = loadLS();
+  if (key in ls) {
+    delete ls[key];
+    saveLS(ls);
+  }
+  setSS(key, false);
+}
+
+/** Convenience: clear all saved permission choices. */
+export function clearPermPrefs(): void {
+  try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
+  for (const k of ALL_KEYS) setSS(k, false);
+}
+
+/** Clear only the session-scoped (“Only this time”) flags for this tab. */
+export function clearSessionPerms(): void {
+  try {
+    for (const k of ALL_KEYS) {
+      sessionStorage.removeItem(SS_PREFIX + k);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+/**
+ * Compute what the UI should do right now for a permission:
+ *  - 'allow' -> we have 'always' in LS or an active 'session' flag
+ *  - 'deny'  -> we have 'never'
+ *  - 'ask'   -> nothing stored (show the prompt screen)
+ */
+export type PermDecision = 'allow' | 'deny' | 'ask';
+export function decidePerm(key: PermKey): PermDecision {
+  const p = getPermPolicy(key);
+  if (p === 'always' || p === 'session') return 'allow';
+  if (p === 'never') return 'deny';
+  return 'ask';
+}

@@ -1,0 +1,60 @@
+{
+  "packageId": "app.vercel.bitewise_five.twa",
+  "host": "bitewise-five.vercel.app",
+  "name": "BiteWise",
+  "launcherName": "BiteWise",
+  "display": "standalone",
+  "themeColor": "#F97316",
+  "themeColorDark": "#000000",
+  "navigationColor": "#151322",
+  "navigationColorDark": "#151322",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#050915",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://bitewise.co.in/icons/icon-512.png",
+  "maskableIconUrl": "https://bitewise.co.in/icons/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "/home/karan_gupta/bitewise/android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "v.1.1.4",
+  "appVersionCode": 10006,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://bitewise-five.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://bitewise-five.vercel.app/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [
+    {
+      "name": "release",
+      "value": "50:5C:AC:09:D2:DC:D8:33:D0:8F:C2:26:66:B0:15:D3:04:D2:72:E4:DC:AE:F9:6F:CB:67:BF:3B:75:75:93:D0"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "v.1.1.4",
+  "fullScreen": true,
+  "immersiveModeEnabled": true,
+  "useBrowserControls": false,
+  "transparentBackground": false
+}

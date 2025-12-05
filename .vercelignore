@@ -1,0 +1,27 @@
+# Generated / heavy folders not needed for Vercel deploy
+node_modules
+build
+dist
+.next
+.cache
+tmp
+.git
+.gitignore
+
+# Android / native artifacts
+android
+app/.gradle
+app/build
+
+# Backend / server artifacts
+backend-cjs
+backend-api
+firebase
+
+# Local tooling
+.vscode
+.idea
+
+# Logs and temp
+npm-debug.log*
+yarn-error.log*
