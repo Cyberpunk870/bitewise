@@ -15,7 +15,6 @@ app/build
 
 # Backend / server artifacts
 backend-cjs
-backend-api
 firebase
 
 # Local tooling
