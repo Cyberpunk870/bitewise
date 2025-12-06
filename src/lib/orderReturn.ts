@@ -27,11 +27,25 @@ export type OutboundCtx = {
 
 const KEY = 'bw.outbound.order';
 
+function readStored(): OutboundCtx | null {
+  const parse = (raw: string | null) => {
+    if (!raw) return null;
+    try { return JSON.parse(raw) as OutboundCtx; } catch { return null; }
+  };
+  const ls = parse(localStorage?.getItem?.(KEY) || null);
+  if (ls) return ls;
+  return parse(sessionStorage?.getItem?.(KEY) || null);
+}
+
+function writeStored(ctx: OutboundCtx) {
+  try { localStorage.setItem(KEY, JSON.stringify(ctx)); } catch {}
+  try { sessionStorage.setItem(KEY, JSON.stringify(ctx)); } catch {}
+}
+
 export function getPendingReturn(): OutboundCtx | null {
   try {
-    const raw = sessionStorage.getItem(KEY);
-    if (!raw) return null;
-    const ctx = JSON.parse(raw) as OutboundCtx;
+    const ctx = readStored();
+    if (!ctx) return null;
     // expire after 2h
     if (Date.now() - ctx.ts > 2 * 60 * 60 * 1000) {
       clearPendingReturn();
@@ -46,6 +60,9 @@ export function getPendingReturn(): OutboundCtx | null {
 export function clearPendingReturn() {
   try {
     sessionStorage.removeItem(KEY);
+  } catch {}
+  try {
+    localStorage.removeItem(KEY);
   } catch {}
 }
 
@@ -68,9 +85,7 @@ export function initReturnListener() {
  */
 export async function startOutbound(ctx: OutboundCtx): Promise<void> {
   // (1) keep local
-  try {
-    sessionStorage.setItem(KEY, JSON.stringify(ctx));
-  } catch {}
+  writeStored(ctx);
 
   // (2) ask backend to create outbound record
   try {
@@ -96,9 +111,7 @@ export async function startOutbound(ctx: OutboundCtx): Promise<void> {
 
     if (outboundRes?.id) {
       const withId: OutboundCtx = { ...ctx, id: String(outboundRes.id) };
-      try {
-        sessionStorage.setItem(KEY, JSON.stringify(withId));
-      } catch {}
+      writeStored(withId);
       track('compare_outbound', {
         platform: ctx.platform,
         restaurant: ctx.restaurantName,
@@ -185,12 +198,7 @@ export async function confirmOrderPlaced(): Promise<{
         });
         if (res?.id) {
           outboundId = String(res.id);
-          try {
-            sessionStorage.setItem(
-              KEY,
-              JSON.stringify({ ...ctx, id: outboundId })
-            );
-          } catch {}
+          writeStored({ ...ctx, id: outboundId });
         }
       } catch (err) {
         logError('apiMarkOutbound (retry) failed', { err: String(err) });
