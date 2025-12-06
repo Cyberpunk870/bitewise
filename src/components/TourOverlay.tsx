@@ -75,11 +75,14 @@ export default function TourOverlay() {
             className="px-3 py-1.5 rounded-full border border-gray-300 text-sm"
             onClick={index === 0 ? stop : back}
           >
-            {index === 0 ? 'Skip' : 'Back'}
+            {index === 0 ? 'Skip tour' : 'Back'}
           </button>
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-full border border-gray-300 text-sm" onClick={stop}>
-              Exit
+            <button
+              className="px-3 py-1.5 rounded-full border border-gray-300 text-xs md:text-sm"
+              onClick={stop}
+            >
+              Don&apos;t show again
             </button>
             <button className="px-3 py-1.5 rounded-full bg-black text-white text-sm" onClick={next}>
               {index === steps.length - 1 ? 'Finish' : 'Next'}

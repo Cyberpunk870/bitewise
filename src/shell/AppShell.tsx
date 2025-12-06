@@ -13,7 +13,7 @@ import { ensureFirebaseBoot } from '../lib/firebaseBoot';
 import { toast } from '../store/toast';
 import { track } from '../lib/track';
 import TourOverlay from '../components/TourOverlay';
-import { useTour, shouldAutoStartTour } from '../store/tour';
+import { shouldAutoStartTour, useTour } from '../store/tour';
 import OfflineBanner from '../components/OfflineBanner';
 import OfflineTooltip from '../components/OfflineTooltip';
 const lazyCloud = () => import('../lib/cloudProfile');
@@ -36,7 +36,6 @@ export default function AppShell() {
   const nav = useNavigate();
   const location = useLocation();
   const timerRef = useRef<number | null>(null);
-  const tour = useTour();
   const [offline, setOffline] = React.useState<boolean>(() => {
     if (typeof navigator === 'undefined') return false;
     return navigator.onLine === false;
@@ -492,7 +491,6 @@ export default function AppShell() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      // Only show tour when a session exists and we're in the main app (not onboarding/auth/unlock)
       const path = location.pathname;
       const inAuthFlow =
         path.startsWith('/onboarding') ||
@@ -500,20 +498,23 @@ export default function AppShell() {
         path === '/unlock';
       if (inAuthFlow) return;
       if (!hasActiveSession()) return;
+
+      const tourState = useTour.getState();
+      if (tourState.active || tourState.steps.length > 0) return;
       if (!shouldAutoStartTour()) return;
 
-      tour.setSteps([
+      tourState.setSteps([
         { id: 'addr', selector: '#nav-address', title: 'Your address', body: 'Quickly confirm or change your delivery address here.' },
         { id: 'mic', selector: '#nav-mic', title: 'Voice search', body: 'Tap the mic to search by voice.' },
         { id: 'cart', selector: '#nav-cart', title: 'Cart', body: 'View your items and checkout.' },
         { id: 'bot', selector: '#yummibot-trigger', title: 'YummiBot', body: 'Chat for trending picks, favorites, and quick suggestions.' },
-        { id: 'menu', selector: '#nav-menu', title: 'Settings & security', body: 'Open the menu to reach settings, passkeys, notifications, referrals, and BiteCoins.' },
+        { id: 'menu', selector: '#nav-menu', title: 'Settings & more', body: 'Open settings, passkeys, notifications, referrals, and BiteCoins.' },
       ]);
-      tour.start();
+      tourState.start();
     } catch {
       // fail-safe: do nothing if tour cannot start
     }
-  }, [tour, location.pathname]);
+  }, [location.pathname]);
 
   return (
     <MissionStatsProvider>
