@@ -50,25 +50,22 @@ const withSuspense = (node: React.ReactElement) => (
 
 /* ---------- Guards ---------- */
 function RequireAuthedOutlet() {
-  const hasPhone = !!(sessionStorage.getItem('bw.session.phone') || '');
-  if (hasPhone) return <Outlet />;
-
-  const reason = sessionStorage.getItem('bw.logoutReason') || '';
-  if (reason === 'idle') return <Navigate to="/unlock" replace />;
-
-  return <Navigate to="/" replace />; // go to Welcome
+  const hasVerified = !!(sessionStorage.getItem('bw.session.phoneVerified') || '');
+  if (hasVerified) return <Outlet />;
+  return <Navigate to="/onboarding/auth/phone" replace />;
 }
 
 function RequireVisitorOutlet() {
-  // Block onboarding for already authed users
-  const hasPhone = !!(sessionStorage.getItem('bw.session.phone') || '');
+  const hasVerified = !!(sessionStorage.getItem('bw.session.phoneVerified') || '');
   const loc = useLocation();
   const path = loc.pathname;
-  const isAuthScreens = path.startsWith('/onboarding/auth/');
 
-  if (hasPhone && isAuthScreens) {
+  // If already logged in and hitting root/onboarding root, send to home
+  if (hasVerified && (path === '/' || path === '/onboarding')) {
     return <Navigate to="/home" replace />;
   }
+
+  // Allow onboarding/auth screens even if logged in (to avoid skipping OTP)
   return <Outlet />;
 }
 

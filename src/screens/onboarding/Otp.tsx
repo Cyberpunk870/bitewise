@@ -62,7 +62,14 @@ export default function Otp() {
       if (phoneE164) {
         upsertUser({ phone: phoneE164, name: '' });
         setActivePhone(phoneE164);
-        try { sessionStorage.setItem('bw.auth.verified', '1'); } catch {}
+        try {
+          sessionStorage.setItem('bw.auth.verified', '1');
+          sessionStorage.setItem('bw.session.phoneVerified', phoneE164);
+          localStorage.setItem(
+            'bw.session',
+            JSON.stringify({ phone: phoneE164, createdAt: Date.now() })
+          );
+        } catch {}
       }
 
       // 🔄 notify the rest of app (AppShell, etc.)

@@ -41,6 +41,25 @@ export default function AppShell() {
     return navigator.onLine === false;
   });
 
+  // One-time cleanup of legacy session flags to avoid skipping OTP
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const MIGRATION_FLAG = 'bw.migration.v1.clearedStaleAuth';
+    if (localStorage.getItem(MIGRATION_FLAG)) return;
+    try {
+      sessionStorage.removeItem('bw.session.phone');
+      sessionStorage.removeItem('bw.active.phone');
+      sessionStorage.removeItem('bw.session.phoneVerified'); // will be set after OTP
+    } catch {}
+    // Best-effort sign out stale Firebase session
+    import('firebase/auth')
+      .then(({ getAuth, signOut }) => {
+        try { signOut(getAuth()).catch(() => {}); } catch {}
+      })
+      .catch(() => {});
+    try { localStorage.setItem(MIGRATION_FLAG, '1'); } catch {}
+  }, []);
+
   // App open + daily session ping
   useEffect(() => {
     try {
@@ -116,17 +135,17 @@ export default function AppShell() {
   };
 
   /* Track last route (return after unlock) */
-  useEffect(() => {
-    if (
-      !location.pathname.startsWith('/onboarding') &&
-      !location.pathname.startsWith('/auth') &&
-      location.pathname !== '/unlock'
-    ) {
-      const path = location.pathname + (location.search || '');
-      setLastRoute(path);
-      try { sessionStorage.setItem('bw.lastRoute', path); } catch {}
-    }
-  }, [location.pathname, location.search]);
+useEffect(() => {
+  if (
+    !location.pathname.startsWith('/onboarding') &&
+    !location.pathname.startsWith('/auth') &&
+    location.pathname !== '/unlock'
+  ) {
+    const path = location.pathname + (location.search || '');
+    setLastRoute(path);
+    try { sessionStorage.setItem('bw.lastRoute', path); } catch {}
+  }
+}, [location.pathname, location.search]);
 
   /* Ensure Firebase is warmed up for onboarding/auth routes */
   useEffect(() => {
