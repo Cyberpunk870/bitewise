@@ -41,6 +41,22 @@ export default function Leaderboard() {
   const [rows, setRows] = useState<LeaderboardEntry[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [authReady, setAuthReady] = useState<"loading" | "ready" | "needsLogin">("loading");
+
+  useEffect(() => {
+    const hasVerified = !!(sessionStorage.getItem("bw.session.phoneVerified") || "");
+    if (!hasVerified) {
+      setAuthReady("needsLogin");
+      setLoading(false);
+      return;
+    }
+    let unsub: (() => void) | null = null;
+    const auth = getAuth();
+    unsub = auth.onAuthStateChanged((user) => {
+      setAuthReady(user ? "ready" : "needsLogin");
+    });
+    return () => { unsub?.(); };
+  }, []);
 
   // helper: load data for "This Week"
   async function loadWeek() {
@@ -50,7 +66,13 @@ export default function Leaderboard() {
     try {
       // 1. who am I? (from Firebase + /api/users/profile)
       const auth = getAuth();
-      const uid = auth.currentUser?.uid || "guest";
+      const user = auth.currentUser;
+      if (!user) {
+        setAuthReady("needsLogin");
+        setLoading(false);
+        return;
+      }
+      const uid = user.uid;
 
       // server already knows who you are via bearer token
       const meProfileResp = await getUserProfile();
@@ -249,6 +271,14 @@ export default function Leaderboard() {
   return (
     <main className="min-h-screen px-4 py-6 text-white">
       <div className="max-w-4xl mx-auto space-y-5">
+        {authReady === "needsLogin" && (
+          <div className="text-sm text-white/80">
+            Please log in with your phone number to view the leaderboard.
+          </div>
+        )}
+        {authReady === "loading" && (
+          <div className="text-sm text-white/60">Loading…</div>
+        )}
         <header className="flex items-center justify-between">
           <button
             className="px-3 py-1.5 text-sm rounded-full border border-white/20 bg-white/10 hover:bg-white/15 transition"

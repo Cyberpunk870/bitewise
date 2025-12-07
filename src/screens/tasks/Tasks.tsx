@@ -19,6 +19,25 @@ const fmt = (ms: number) => {
 
 export default function MissionsScreen() {
   const nav = useNavigate();
+  const [authReady, setAuthReady] = useState<'loading' | 'ready' | 'needsLogin'>('loading');
+
+  useEffect(() => {
+    const hasVerified = !!(sessionStorage.getItem('bw.session.phoneVerified') || '');
+    if (!hasVerified) {
+      setAuthReady('needsLogin');
+      return;
+    }
+    let unsub: (() => void) | null = null;
+    import('firebase/auth')
+      .then(({ getAuth, onAuthStateChanged }) => {
+        const auth = getAuth();
+        unsub = onAuthStateChanged(auth, (user) => {
+          setAuthReady(user ? 'ready' : 'needsLogin');
+        });
+      })
+      .catch(() => setAuthReady('needsLogin'));
+    return () => { unsub?.(); };
+  }, []);
   const [snapshot, setSnapshot] = useState<Task[]>(() => {
     ensureDailyTasks();
     return getTasks();
@@ -81,6 +100,14 @@ export default function MissionsScreen() {
 
   return (
     <main className="min-h-screen px-4 py-6 text-white">
+      {authReady === 'needsLogin' && (
+        <div className="max-w-5xl mx-auto mb-4 text-sm text-white/80">
+          Please log in with your phone number to view and complete missions.
+        </div>
+      )}
+      {authReady === 'loading' && (
+        <div className="max-w-5xl mx-auto mb-4 text-sm text-white/60">Loading…</div>
+      )}
       <div className="max-w-5xl mx-auto space-y-5">
         <header className="flex items-center justify-between">
           <button
