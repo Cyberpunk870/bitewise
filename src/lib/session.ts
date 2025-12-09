@@ -201,6 +201,13 @@ export async function manualLogout(opts?: { navigate?: (path: string) => void })
     window.dispatchEvent(new Event('bw:auth:changed'));
   } catch {}
 
+  // clear quick-unlock hints
+  try {
+    localStorage.removeItem('bw:hasPasskey');
+    localStorage.removeItem('bw:lastUserName');
+    localStorage.removeItem('bw:lastUserPhone');
+  } catch {}
+
   // start navigation to login
   if (opts?.navigate) {
     opts.navigate('/onboarding/auth/phone?mode=login');

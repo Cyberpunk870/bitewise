@@ -22,14 +22,14 @@ plugins {
 
 def twaManifest = [
     applicationId: 'app.vercel.bitewise_five.twa',
-    hostName: 'bitewise-five.vercel.app', // The domain being opened in the TWA.
+    hostName: 'www.bitewise.co.in', // The domain being opened in the TWA.
     launchUrl: '/', // The start path for the TWA. Must be relative to the domain.
     name: 'BiteWise', // The application name.
     launcherName: 'BiteWise', // The name shown on the Android Launcher.
     themeColor: '#F97316', // The color used for the status bar.
     themeColorDark: '#000000', // The color used for the dark status bar.
-    navigationColor: '#000000', // The color used for the navigation bar.
-    navigationColorDark: '#000000', // The color used for the dark navbar.
+    navigationColor: '#151322', // The color used for the navigation bar.
+    navigationColorDark: '#151322', // The color used for the dark navbar.
     navigationDividerColor: '#000000', // The navbar divider color.
     navigationDividerColorDark: '#000000', // The dark navbar divider color.
     backgroundColor: '#050915', // The color used for the splash screen background.
@@ -46,33 +46,19 @@ def twaManifest = [
     // The fallback strategy for when Trusted Web Activity is not available. Possible values are
     // 'customtabs' and 'webview'.
     fallbackType: 'customtabs',
-    enableSiteSettingsShortcut: 'true',
+    enableSiteSettingsShortcut: 'false',
     orientation: 'portrait',
 ]
 
 android {
     compileSdkVersion 36
     namespace "app.vercel.bitewise_five.twa"
-
-    signingConfigs {
-        release {
-            def ksPathVal = System.getenv('TWA_KEYSTORE_PATH') ?: '/home/karan_gupta/bitewise/android.keystore'
-            def ksPwdVal = System.getenv('TWA_KEYSTORE_PWD') ?: ''
-            def aliasVal = System.getenv('TWA_KEY_ALIAS') ?: 'android'
-            def keyPwdVal = System.getenv('TWA_KEY_PWD') ?: ''
-            storeFile file(ksPathVal)
-            storePassword ksPwdVal
-            keyAlias aliasVal
-            keyPassword keyPwdVal
-        }
-    }
-
     defaultConfig {
         applicationId "app.vercel.bitewise_five.twa"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 10006
-        versionName "v.1.1.4"
+        versionCode 10013
+        versionName "1.1.14"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -90,12 +76,12 @@ android {
             // The URL the Web Manifest for the Progressive Web App that the TWA points to. This
             // is used by Chrome OS and Meta Quest to open the Web version of the PWA instead of
             // the TWA, as it will probably give a better user experience for non-mobile devices.
-            resValue "string", "webManifestUrl", 'https://bitewise-five.vercel.app/manifest.json'
+            resValue "string", "webManifestUrl", 'https://www.bitewise.co.in/manifest.json'
         
 
         
             // This is used by Meta Quest.
-            resValue "string", "fullScopeUrl", 'https://bitewise-five.vercel.app/'
+            resValue "string", "fullScopeUrl", 'https://www.bitewise.co.in/'
         
 
         
@@ -166,10 +152,7 @@ android {
     }
     buildTypes {
         release {
-            // Disable minification/shrinking temporarily to reduce build memory footprint.
-            minifyEnabled false
-            shrinkResources false
-            signingConfig signingConfigs.release
+            minifyEnabled true
         }
     }
     compileOptions {

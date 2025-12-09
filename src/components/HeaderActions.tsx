@@ -1,9 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CoinIcon from './CoinIcon';
 import { emit } from '../lib/events';
 import useCart from '../store/cart';
-import { decidePerm } from '../lib/permPrefs';
 
 type Props = {
   menuOpen: boolean;
@@ -53,26 +52,22 @@ export default function HeaderActions({
   menuId,
 }: Props) {
   const nav = useNavigate();
-  const { count } = useCart();
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const { count } = useCart();
 
   useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMenuOpen(false);
     };
-    document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onEsc);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onEsc);
-    };
+    return () => document.removeEventListener('keydown', onEsc);
   }, [setMenuOpen]);
+
+  const closeMenu = () => setMenuOpen(false);
 
   return (
     <div className="justify-self-end flex items-center gap-3 relative">
+      {/* Bites / coins */}
       <button
         onClick={() => {
           emit('bw:open:tasks', null);
@@ -87,6 +82,7 @@ export default function HeaderActions({
         <span className="text-xs font-semibold">{tokens}</span>
       </button>
 
+      {/* Cart */}
       <button
         type="button"
         className="relative h-9 w-10 grid place-items-center rounded-xl border border-white/40 bg-white/90 text-slate-900 shadow-[0_10px_30px_rgba(5,9,20,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
@@ -103,7 +99,8 @@ export default function HeaderActions({
         )}
       </button>
 
-      <div className="relative" ref={menuRef}>
+      {/* Hamburger / Menu */}
+      <div className="relative">
         <button
           type="button"
           className="h-9 w-10 grid place-items-center rounded-xl border border-white/40 bg-white/90 text-slate-900 shadow-[0_10px_30px_rgba(5,9,20,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
@@ -115,55 +112,100 @@ export default function HeaderActions({
         >
           <MenuIcon />
         </button>
+
         {menuOpen && (
-          <div
-            role="menu"
-            className="absolute right-0 top-full mt-2 w-[320px] max-h-[70vh] overflow-auto rounded-2xl border border-white/15 bg-[rgba(6,12,25,0.95)] backdrop-blur-2xl shadow-[0_25px_60px_rgba(3,7,15,0.7)] p-2 z-50 text-white"
-          >
-            <div className="grid gap-2">
-              <NavLink to="/notifications" label="Notifications" close={() => setMenuOpen(false)} />
-              <NavLink to="/tasks" label="Missions" close={() => setMenuOpen(false)} />
-              <NavLink to="/leaderboard" label="Leaderboard" close={() => setMenuOpen(false)} />
-              <NavLink to="/achievements" label="Achievements" close={() => setMenuOpen(false)} />
-              <NavLink to="/orders/history" label="Order history" close={() => setMenuOpen(false)} />
-              <NavLink to="/feedback" label="Send feedback" close={() => setMenuOpen(false)} />
-              <NavLink to="/settings" label="Settings" close={() => setMenuOpen(false)} id="nav-settings" />
-              {/* Analytics UI disabled; data is stored in Firestore for investor reporting */}
+          <div className="fixed inset-0 z-50 bg-black/40 flex" onClick={closeMenu}>
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label="BiteWise menu"
+              className="ml-auto h-full w-full sm:w-[min(360px,80vw)] bg-[#050712] rounded-none sm:rounded-l-3xl shadow-xl flex flex-col text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Menu header */}
+              <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-white/10">
+                <div className="text-base font-semibold">Menu</div>
+                <button
+                  type="button"
+                  onClick={closeMenu}
+                  className="px-3 py-1 text-xs font-medium rounded-full bg-white/10 hover:bg-white/20"
+                >
+                  Close
+                </button>
+              </div>
 
-              <details className="mt-1 rounded-xl border border-white/15 bg-white/5 open:shadow-inner">
-                <summary className="cursor-pointer px-3 py-2 rounded text-sm text-white/90 hover:bg-white/10 select-none">
-                  Filter
-                </summary>
-                <div className="p-3 pt-1 grid gap-4">
-                  <Slider label="Price" suffix={`≤ ₹${priceMax}`} min={50} max={1500} step={10} value={priceMax} onChange={setPriceMax} />
-                  <Slider label="Rating" suffix={`≥ ${ratingMin.toFixed(1)}`} min={0} max={5} step={0.1} value={ratingMin} onChange={setRatingMin} />
-                  <Slider label="Distance" suffix={`≤ ${distanceMax} km`} min={1} max={20} step={1} value={distanceMax} onChange={setDistanceMax} />
-                  <div className="flex items-center justify-between">
-                    <button
-                      className="px-3 py-2 rounded border border-white/20 text-white/80 hover:bg-white/10"
-                      onClick={resetFilters}
-                    >
-                      Reset
-                    </button>
-                    <button
-                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] font-semibold shadow-lg shadow-rose-500/30"
-                      onClick={applyFilters}
-                    >
-                      Done
-                    </button>
-                  </div>
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto px-4 pb-6 pt-3">
+                <div className="grid gap-2">
+                  <NavLink to="/notifications" label="Notifications" close={closeMenu} />
+                  <NavLink to="/tasks" label="Missions" close={closeMenu} />
+                  <NavLink to="/leaderboard" label="Leaderboard" close={closeMenu} />
+                  <NavLink to="/achievements" label="Achievements" close={closeMenu} />
+                  <NavLink to="/orders/history" label="Order history" close={closeMenu} />
+                  <NavLink to="/feedback" label="Send feedback" close={closeMenu} />
+                  <NavLink to="/settings" label="Settings" close={closeMenu} id="nav-settings" />
+                  {/* Analytics UI disabled; data is stored in Firestore for investor reporting */}
+
+                  <details className="mt-1 rounded-xl border border-white/15 bg-white/5 open:shadow-inner">
+                    <summary className="cursor-pointer px-3 py-2 rounded text-sm text-white/90 hover:bg-white/10 select-none">
+                      Filter
+                    </summary>
+                    <div className="p-3 pt-1 grid gap-4">
+                      <Slider
+                        label="Price"
+                        suffix={`≤ ₹${priceMax}`}
+                        min={50}
+                        max={1500}
+                        step={10}
+                        value={priceMax}
+                        onChange={setPriceMax}
+                      />
+                      <Slider
+                        label="Rating"
+                        suffix={`≥ ${ratingMin.toFixed(1)}`}
+                        min={0}
+                        max={5}
+                        step={0.1}
+                        value={ratingMin}
+                        onChange={setRatingMin}
+                      />
+                      <Slider
+                        label="Distance"
+                        suffix={`≤ ${distanceMax} km`}
+                        min={1}
+                        max={20}
+                        step={1}
+                        value={distanceMax}
+                        onChange={setDistanceMax}
+                      />
+                      <div className="flex items-center justify-between">
+                        <button
+                          className="px-3 py-2 rounded border border-white/20 text-white/80 hover:bg-white/10"
+                          onClick={resetFilters}
+                        >
+                          Reset
+                        </button>
+                        <button
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] font-semibold shadow-lg shadow-rose-500/30"
+                          onClick={applyFilters}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+
+                  <button
+                    className="mt-1 w-full px-3 py-2 rounded-xl border border-white/20 bg-white/5 text-white hover:bg-white/10 transition"
+                    onClick={() => {
+                      closeMenu();
+                      logout();
+                    }}
+                  >
+                    Log out
+                  </button>
                 </div>
-              </details>
-
-              <button
-                className="mt-1 w-full px-3 py-2 rounded-xl border border-white/20 bg-white/5 text-white hover:bg-white/10 transition"
-                onClick={() => {
-                  setMenuOpen(false);
-                  logout();
-                }}
-              >
-                Log out
-              </button>
+              </div>
             </div>
           </div>
         )}
@@ -220,3 +262,4 @@ function Slider({
     </div>
   );
 }
+

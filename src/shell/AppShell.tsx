@@ -40,6 +40,28 @@ export default function AppShell() {
     if (typeof navigator === 'undefined') return false;
     return navigator.onLine === false;
   });
+  const hideTimestampRef = React.useRef<number | null>(null);
+
+  // Eagerly boot Firebase once for the app shell to avoid race conditions (analytics/auth)
+  useEffect(() => {
+    ensureFirebaseBoot().catch(() => {});
+  }, []);
+
+  // Reload if the tab was hidden for >30 minutes
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') {
+        hideTimestampRef.current = Date.now();
+      } else if (document.visibilityState === 'visible') {
+        const last = hideTimestampRef.current;
+        if (last != null && Date.now() - last > 30 * 60 * 1000) {
+          window.location.reload();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
 
   // One-time cleanup of legacy session flags to avoid skipping OTP
   useEffect(() => {
@@ -58,6 +80,28 @@ export default function AppShell() {
       })
       .catch(() => {});
     try { localStorage.setItem(MIGRATION_FLAG, '1'); } catch {}
+  }, []);
+
+  // Migrate legacy microphone keys to the canonical permPrefs.microphone storage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('bw:permPrefs:v1');
+      if (raw && raw.includes('"mic"')) {
+        const parsed = JSON.parse(raw || '{}') || {};
+        if (parsed.mic && !parsed.microphone) {
+          parsed.microphone = parsed.mic;
+          delete parsed.mic;
+          localStorage.setItem('bw:permPrefs:v1', JSON.stringify(parsed));
+        }
+      }
+      if (sessionStorage.getItem('bw:permSession:mic') === '1') {
+        sessionStorage.removeItem('bw:permSession:mic');
+        sessionStorage.setItem('bw:permSession:microphone', '1');
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   // App open + daily session ping
@@ -80,6 +124,29 @@ export default function AppShell() {
       if (daysSince === 1) track('day1_return');
       if (daysSince === 7) track('day7_return');
     } catch {}
+  }, []);
+
+  // If no verified session but passkey hint exists, route to quick unlock on auth screens
+  useEffect(() => {
+    try {
+      const hasSession = !!sessionStorage.getItem('bw.session.phoneVerified');
+      const hasPasskey = localStorage.getItem('bw:hasPasskey') === 'true';
+      const lastPhone = localStorage.getItem('bw:lastUserPhone') || localStorage.getItem('bw.lastPhone');
+      const path = location.pathname;
+      const onAuthScreens =
+        path === '/' ||
+        path.startsWith('/onboarding') ||
+        path.startsWith('/auth') ||
+        path === '/unlock';
+      if (!hasSession && hasPasskey && lastPhone && onAuthScreens) {
+        nav('/quick-unlock', { replace: true });
+      }
+    } catch {}
+  }, [location.pathname, nav]);
+
+  // Eagerly boot Firebase so downstream callers (analytics/auth) always have a default app
+  useEffect(() => {
+    ensureFirebaseBoot().catch(() => {});
   }, []);
 
   useEffect(() => {

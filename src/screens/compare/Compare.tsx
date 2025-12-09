@@ -119,13 +119,22 @@ export default function Compare() {
     );
   }, [id]);
 
+  const selectedNames = useMemo(() => {
+    return (items || []).map((it: any) => String(it.name || it.id || '')?.toLowerCase()).filter(Boolean);
+  }, [items]);
+
   const columns: Column[] = useMemo(() => {
     if (!restaurant?.priceBreakdown?.length) return [];
     return restaurant.priceBreakdown.map(p => {
-      const { subtotal, total } = calcTotals(p);
-      return { ...p, subtotal, total };
-    });
-  }, [restaurant]);
+      const filteredItems =
+        selectedNames.length > 0
+          ? p.items.filter((it: any) => selectedNames.includes(String(it.name || it.menu_id || '').toLowerCase()))
+          : p.items;
+      const filtered = { ...p, items: filteredItems };
+      const { subtotal, total } = calcTotals(filtered as any);
+      return { ...(filtered as any), subtotal, total };
+    }).filter((p) => p.items.length > 0 || selectedNames.length === 0);
+  }, [restaurant, selectedNames]);
 
   const cheaper =
     columns.length >= 2

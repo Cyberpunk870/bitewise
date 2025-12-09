@@ -19,7 +19,8 @@
      to an Activity by ".MyActivity" instead of the full name. If more Activities are added to the
      application, the package attribute will need to reflect the correct path in order to use
      the abbreviated format. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="app.vercel.bitewise_five.twa">
 
     
         <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
@@ -32,12 +33,10 @@
     
 
     <application
-        android:name="co.in.bitewise.app.Application"
+        android:name="Application"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/appName"
-        
-        android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
         
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Translucent.NoTitleBar">
@@ -61,21 +60,8 @@
         
 
         
-            <activity android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
-                android:exported="false"
-                android:enabled="true"
-                android:excludeFromRecents="true">
-                <meta-data
-                    android:name="android.support.customtabs.trusted.MANAGE_SPACE_URL"
-                    android:value="@string/launchUrl" />
-                <intent-filter>
-                    <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
-                    <category android:name="android.intent.category.DEFAULT" />
-                </intent-filter>
-            </activity>
-        
 
-        <activity android:name="co.in.bitewise.app.LauncherActivity"
+        <activity android:name="LauncherActivity"
             android:alwaysRetainTaskState="true"
             android:label="@string/launcherName"
             android:exported="true">
@@ -174,7 +160,7 @@
         </provider>
 
         <service
-            android:name="co.in.bitewise.app.DelegationService"
+            android:name=".DelegationService"
             android:enabled="@bool/enableNotification"
             android:exported="@bool/enableNotification">
 

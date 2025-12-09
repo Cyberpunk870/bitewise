@@ -3,7 +3,7 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../store/cart';
 import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
-import { getDishImage } from '../../lib/images';
+import { getDishImage, placeholderDishUrl } from '../../lib/images';
 import type { FilterState, TabKey } from './types';
 import { ensureActiveProfile, getActiveProfile } from '../../lib/profileStore';
 import {
@@ -23,6 +23,7 @@ import { setActiveProfileFields } from '../../lib/profileStore';
 import GlassPanel from '../../components/GlassPanel';
 const AppHeader = React.lazy(() => import('../../components/AppHeader'));
 const DishGrid = React.lazy(() => import('./HomeDishGrid'));
+const HomeSectionCarousel = React.lazy(() => import('../../components/home/HomeSectionCarousel'));
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
@@ -71,6 +72,13 @@ export default function Home() {
     add({ id, name });
     emit('bw:dish:add', { id, name });
   }
+  const addById = useCallback(
+    (id: string) => {
+      const hit = DISH_CATALOG.find((d: any) => String(d.id) === String(id));
+      addAndTrack({ id, name: hit?.name || 'Item' });
+    },
+    [add]
+  );
   function onDishSelect(id: string) {
     setSelectedId((cur) => (cur === id ? null : id));
     emit('bw:dish:browse', { id });
@@ -88,6 +96,12 @@ export default function Home() {
   const [theme, setTheme] = useState<SeasonalTheme | null>(() => resolveSeasonalTheme());
   const [themes, setThemes] = useState<SeasonalTheme[]>(() => listActiveThemes());
   const [themeIndex, setThemeIndex] = useState(0);
+  const [extraSections, setExtraSections] = useState({
+    similar: [] as any[],
+    brands: [] as any[],
+    people: [] as any[],
+    priceDrops: [] as any[],
+  });
 
   useEffect(() => {
     const refresh = () => setProfile(getActiveProfile());
@@ -132,6 +146,39 @@ export default function Home() {
       const names = DISH_CATALOG.map((d: any) => d.name);
       window.dispatchEvent(new CustomEvent('bw:dishes:names', { detail: names }));
     } catch {}
+  }, []);
+
+  // Build lightweight carousel data from catalog
+  useEffect(() => {
+    const imgFor = (d: any) => getDishImage(d.name, d.imageUrl, d.category) || d.imageUrl || placeholderDishUrl();
+    const catalog = DISH_CATALOG.slice(0, 40);
+    const similar = catalog.slice(0, 10).map((d) => ({
+      id: String(d.id),
+      title: d.name,
+      image: imgFor(d),
+    }));
+    const people = catalog.slice(10, 22).map((d) => ({
+      id: String(d.id),
+      title: d.name,
+      image: imgFor(d),
+    }));
+    const priceDrops = catalog.slice(5, 18).map((d, idx) => ({
+      id: String(d.id),
+      title: d.name,
+      image: imgFor(d),
+      discountLabel: `${10 + (idx % 4) * 5}% OFF`,
+    }));
+    const brandsMap = new Map<string, string>();
+    catalog.forEach((d) => {
+      const key = (d.cuisines && d.cuisines[0]) || d.category || 'Popular';
+      if (!brandsMap.has(key)) brandsMap.set(key, imgFor(d));
+    });
+    const brands = Array.from(brandsMap.entries()).slice(0, 12).map(([title, image], i) => ({
+      id: `brand-${i}`,
+      title,
+      image,
+    }));
+    setExtraSections({ similar, people, priceDrops, brands });
   }, []);
 
   // Re-evaluate seasonal theme every 6h
@@ -193,7 +240,7 @@ export default function Home() {
     try {
       if (sessionStorage.getItem('bw.requirePermRecheck') === '1') {
         sessionStorage.removeItem('bw.requirePermRecheck');
-        const needs = (['location', 'notifications', 'mic'] as const)
+        const needs = (['location', 'notifications', 'microphone'] as const)
           .filter((k) => decidePerm(k) === 'ask');
         if (needs.length) {
           nav(`/onboarding/perm/${needs[0]}?from=unlock`, { replace: true });
@@ -473,6 +520,40 @@ export default function Home() {
             onAdd={addAndTrack}
             onDec={(id) => dec(id)}
           />
+        </Suspense>
+
+        {/* Similar products preview strip */}
+        {extraSections.similar.length > 0 && (
+          <section className="px-4 mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-white/90">Similar products</h2>
+              <button className="flex items-center gap-1 text-xs font-medium text-teal-300">
+                See all <span className="text-base leading-none">›</span>
+              </button>
+            </div>
+            <div className="flex items-center gap-3">
+              {extraSections.similar.slice(0, 3).map((dish) => (
+                <div
+                  key={dish.id}
+                  className="h-14 w-14 rounded-full overflow-hidden bg-slate-800 border border-white/10"
+                >
+                  <img
+                    src={dish.image}
+                    alt={dish.title}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <Suspense fallback={null}>
+          <HomeSectionCarousel title="Brands in this category" items={extraSections.brands} />
+          <HomeSectionCarousel title="People also bought" items={extraSections.people} onAdd={addById} />
+          <HomeSectionCarousel title="Price drop" items={extraSections.priceDrops} onAdd={addById} />
         </Suspense>
 
         {/* Bottom bar */}

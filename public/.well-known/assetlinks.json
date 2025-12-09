@@ -1,12 +1,13 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "app.vercel.bitewise_five.twa",
       "sha256_cert_fingerprints": [
-        "34:8E:40:BB:4C:05:C8:AA:4F:2E:E4:A9:32:AA:6E:E9:84:F6:F5:4F:FE:75:5E:BC:59:02:4A:C4:67:1D:B7:30",
-        "58:FE:6A:12:CA:59:50:AE:2D:A7:F9:A9:B9:04:26:EC:B0:C8:03:6D:80:7A:9E:60:35:4F:24:19:74:37:20:E6"
+        "34:8E:40:BB:4C:05:C8:AA:4F:2E:E4:A9:32:AA:6E:E9:84:F6:F5:4F:FE:75:5E:BC:59:02:4A:C4:67:1D:CB:CD"
       ]
     }
   }

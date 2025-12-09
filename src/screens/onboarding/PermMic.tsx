@@ -15,7 +15,7 @@ export default function PermMic() {
   const nav = useNavigate();
 
   // Live, reactive decision: 'allow' | 'deny' | 'ask'
-  const dec: PermDecision = usePermDecision('mic');
+  const dec: PermDecision = usePermDecision('microphone');
 
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState<'always' | 'session' | 'never' | null>(null);
@@ -64,7 +64,7 @@ export default function PermMic() {
     setBusy(true);
     setPicked('always');
     try {
-      setPermPolicy('mic', 'always');
+      setPermPolicy('microphone', 'always');
       const ok = await nudgeNativePrompt();
       // Regardless of ok/err, inform listeners so UI can update
       try { emit('bw:perm:changed', null); } catch {}
@@ -86,7 +86,7 @@ export default function PermMic() {
     setBusy(true);
     setPicked('session');
     try {
-      allowForThisSession('mic'); // mark session intent
+      allowForThisSession('microphone'); // mark session intent
       const ok = await nudgeNativePrompt();
       try { emit('bw:perm:changed', null); } catch {}
       track('perm_mic_allow', { mode: 'session', ok });
@@ -102,7 +102,7 @@ export default function PermMic() {
   function chooseNever() {
     if (busy) return;
     setPicked('never');
-    setPermPolicy('mic', 'never');
+    setPermPolicy('microphone', 'never');
     try { emit('bw:perm:changed', null); } catch {}
     track('perm_mic_deny');
     // Move forward so onboarding cannot stall on denial

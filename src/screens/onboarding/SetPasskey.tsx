@@ -103,6 +103,12 @@ export default function SetPasskey() {
       await verifyRegistration(credential, { label, userAgent: ua });
       emit('bw:passkey:set', null);
       toast.success(existing ? 'Passkey updated' : 'Passkey set');
+      try {
+        const prof = getActiveProfile();
+        if (prof?.name) localStorage.setItem('bw:lastUserName', prof.name);
+        if (prof?.phone) localStorage.setItem('bw:lastUserPhone', prof.phone);
+        localStorage.setItem('bw:hasPasskey', 'true');
+      } catch {}
       await refreshPasskeys();
       const back = computeSafeBack();
       nav(back, { replace: true });

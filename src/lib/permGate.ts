@@ -54,7 +54,7 @@ export function gateMic(): Gate {
   if (!hasAPI || !isSecure())
     return { ok: false, reason: 'unsupported' };
 
-  const d = decidePerm('mic');
+  const d = decidePerm('microphone');
   if (d === 'allow') return { ok: true };
   if (d === 'deny') return { ok: false, reason: 'denied' };
   return { ok: false, reason: 'ask' };

@@ -1,4 +1,4 @@
-package co.in.bitewise.app;
+package app.vercel.bitewise_five.twa;
 
 
 import com.google.androidbrowserhelper.locationdelegation.LocationDelegationExtraCommandHandler;

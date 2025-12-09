@@ -89,69 +89,83 @@ const DishCard = memo(function DishCard({
   return (
     <div
       className={[
-        'group relative w-full max-w-[360px] mx-auto rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl text-white shadow-lg shadow-black/30 p-3 transition h-full',
+        'bg-white/6 rounded-3xl border border-white/10 overflow-hidden flex flex-col text-white shadow-lg shadow-black/30 transition',
         selected ? 'ring-2 ring-white/70' : '',
       ].join(' ')}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onSelect()}
-      style={{ contain: 'layout paint size', containIntrinsicSize: '300px 360px' } as any}
+      style={{ contain: 'layout paint size' } as any}
       onClick={onSelect}
     >
-      <div className="relative w-full rounded-xl overflow-hidden mb-2 aspect-[16/9] bg-white/5">
-        <picture className="absolute inset-0 h-full w-full">
+      <div className="w-full aspect-[4/3] overflow-hidden bg-white/5">
+        <picture className="block h-full w-full">
           {sources.avif && <source srcSet={sources.avif} type="image/avif" />}
           {sources.webp && <source srcSet={sources.webp} type="image/webp" />}
           <img
             src={sources.fallback}
-            className="absolute inset-0 h-full w-full object-cover object-center"
+            className="w-full h-full object-cover object-center"
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'low'}
             decoding="async"
             sizes="(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw"
             onError={(e) => {
-              const el = (e.currentTarget as HTMLImageElement)!;
+              const el = e.currentTarget as HTMLImageElement;
               const ph = placeholderDishUrl();
               if (!el.src.endsWith(ph)) el.src = ph;
             }}
             alt={d.name}
           />
         </picture>
-        {selected && (
-          <div className="absolute inset-0 bg-[rgba(4,9,20,0.88)] backdrop-blur-sm flex items-end justify-center p-3 gap-2">
-            {qty > 0 ? (
-              <div
-                className="grid grid-cols-[36px,52px,36px] items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white px-2 py-2 shadow-lg shadow-black/40"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button className="px-3 text-xl leading-none text-white hover:text-rose-200" onClick={onDec}>
-                  -
-                </button>
-                <div className="text-center select-none font-semibold">{qty}</div>
-                <button className="px-3 text-xl leading-none text-white hover:text-lime-200" onClick={onInc}>
-                  +
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="text-sm w-full rounded-xl px-4 py-2 font-semibold bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] shadow-lg shadow-rose-500/30"
-                onClick={onAddFirst}
-              >
-                Add to cart
-              </button>
-            )}
+      </div>
+
+      <div className="flex-1 px-3 pt-2 pb-1 flex flex-col gap-1">
+        <p className="text-[13px] font-semibold leading-tight line-clamp-2">{d.name}</p>
+        {d.cuisine ? <p className="text-[11px] text-white/60">{d.cuisine}</p> : null}
+        {typeof d.rating === 'number' && (
+          <div className="flex items-center gap-1 text-[11px] text-white/70">
+            <span className="text-yellow-300"><Stars value={d.rating} /></span>
+            <span>{d.rating.toFixed(1)}</span>
           </div>
         )}
       </div>
-      <div className="mt-1 space-y-1 min-h-[48px]">
-        <p className="font-semibold text-white leading-snug">{d.name}</p>
-        {d.cuisine ? <p className="text-sm text-white/70">{d.cuisine}</p> : null}
-        {typeof d.rating === 'number' && (
-          <p className="text-sm flex items-center gap-2 text-white/80">
-            <span className="text-yellow-300"><Stars value={d.rating} /></span>
-            <span>{d.rating.toFixed(1)}</span>
-          </p>
+
+      <div className="px-3 pb-3">
+        {qty > 0 ? (
+          <div className="w-full h-8 rounded-full border border-emerald-400 bg-emerald-500/10 flex items-center justify-between px-3 text-[13px] font-semibold">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDec();
+              }}
+              className="px-1"
+            >
+              -
+            </button>
+            <span className="select-none">{qty}</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onInc();
+              }}
+              className="px-1"
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddFirst();
+            }}
+            className="w-full h-8 rounded-full border border-emerald-400 text-[12px] font-semibold text-emerald-300 bg-black/10 hover:bg-black/20 flex items-center justify-center"
+          >
+            ADD
+          </button>
         )}
       </div>
     </div>
@@ -251,7 +265,7 @@ export default function HomeDishGrid({
     <>
       <section
         id="home-dish-grid"
-        className="mt-6 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] justify-items-center items-stretch"
+        className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 px-4 pb-6 items-stretch"
       >
         {limitedList.map((d, idx) => {
           const id = String(d.id);

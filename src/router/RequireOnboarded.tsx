@@ -17,7 +17,7 @@ function firstPendingPerm(): string | null {
   try {
     if (decidePerm('location') === 'ask') return '/onboarding/perm/location';
     if (decidePerm('notifications') === 'ask') return '/onboarding/perm/notifications';
-    if (decidePerm('mic') === 'ask') return '/onboarding/perm/mic';
+  if (decidePerm('microphone') === 'ask') return '/onboarding/perm/mic';
   } catch {
     // fail soft: if anything blows up here, don't block the user
   }

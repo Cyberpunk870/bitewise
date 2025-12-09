@@ -17,6 +17,7 @@ const SetPasskey = lazy(() => import('./screens/onboarding/SetPasskey'));
 const Finish = lazy(() => import('./screens/onboarding/Finish'));
 
 const Unlock = lazy(() => import('./screens/auth/Unlock'));
+const QuickUnlock = lazy(() => import('./screens/auth/QuickUnlock'));
 
 const Home = lazy(() => import('./screens/home/Home'));
 const Compare = lazy(() => import('./screens/compare/Compare'));
@@ -116,6 +117,7 @@ const router = createBrowserRouter([
 
       // Returning users
       { path: '/unlock', element: withSuspense(<Unlock />) },
+      { path: '/quick-unlock', element: withSuspense(<QuickUnlock />) },
 
       // 🔁 DEPRECATED LEGACY ROUTE
       // Instead of rendering PasskeyLogin (which fakes auth by just setting bw.session.phone),

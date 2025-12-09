@@ -3,7 +3,7 @@ import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useCart from '../store/cart'; // ✅ default import (not { useCart })
 import { getActiveProfile } from '../lib/profileStore';
-import { allowForThisSession, decidePerm } from '../lib/permPrefs';
+import { allowForThisSession, decidePerm, getMicPermission } from '../lib/permPrefs';
 import { getBadgeCounts } from '../lib/badgeCounts';
 import CoinIcon from './CoinIcon';
 import { emit } from '../lib/events';
@@ -229,20 +229,20 @@ export default function AppHeader() {
   }
 
   // Ensure mic permission and sync preference when user explicitly tries voice
-async function ensureMicAccess(): Promise<boolean> {
-  // If user explicitly set mic to "allow" in Settings, trust that and avoid re-prompting.
-  const micPref = decidePerm('mic');
-  if (micPref === 'allow') {
-    allowForThisSession('mic');
-    emit('bw:perm:mic:enabled', null as any);
-    return true;
-  }
+  async function ensureMicAccess(): Promise<boolean> {
+    const micPref = decidePerm('microphone');
+    if (micPref === 'deny') return false;
+    if (micPref === 'allow') {
+      allowForThisSession('microphone');
+      emit('bw:perm:mic:enabled', null as any);
+      return true;
+    }
 
-  const secure =
-    location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
-  if (!secure || !navigator.mediaDevices?.getUserMedia) {
-    emit('bw:toast', {
-      title: 'Voice search blocked',
+    const secure =
+      location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname);
+    if (!secure || !navigator.mediaDevices?.getUserMedia) {
+      emit('bw:toast', {
+        title: 'Voice search blocked',
         body: 'Microphone works only on HTTPS (or localhost).',
       });
       return false;
@@ -252,14 +252,14 @@ async function ensureMicAccess(): Promise<boolean> {
       if (navigator.permissions?.query) {
         const res = await navigator.permissions.query({ name: 'microphone' as PermissionName });
         if (res.state === 'granted') {
-          allowForThisSession('mic');
+          allowForThisSession('microphone');
           emit('bw:perm:changed', null);
           return true;
         }
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop());
-      allowForThisSession('mic');
+      allowForThisSession('microphone');
       emit('bw:perm:changed', null);
       return true;
     } catch (err: any) {
@@ -275,14 +275,15 @@ async function ensureMicAccess(): Promise<boolean> {
 
   // 🔊 Voice search — respect mic decision; no silent session writes
   async function handleVoice() {
-    const micDec = decidePerm('mic'); // 'allow' | 'deny' | 'ask'
-    if (micDec === 'deny') {
+    const micPref = getMicPermission(); // 'always' | 'once' | 'never' | 'unknown'
+    if (micPref === 'never') {
       emit('bw:toast', {
         title: 'Microphone permission needed',
-        body: 'Enable mic in Settings → Permissions to use voice search.',
+        body: 'Microphone is disabled. Enable it in Settings → Permissions to use voice search.',
       });
       return;
     }
+    const micDec = decidePerm('microphone'); // 'allow' | 'deny' | 'ask'
     if (micDec !== 'allow') {
       const ok = await ensureMicAccess();
       if (!ok) return;
@@ -504,11 +505,10 @@ async function ensureMicAccess(): Promise<boolean> {
   return (
     <header className="w-full mx-auto mt-4 px-4">
       <div className="mx-auto w-full max-w-6xl flex flex-col gap-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:gap-6 gap-3">
-          {/* Left */}
-          <div className="text-white space-y-1 flex-1">
+        <div className="home-header flex items-start justify-between gap-4">
+          <div className="home-header-left">
             <BitewiseLogo showTagline showMark={false} />
-            <p className="text-xs text-white/70 mt-2">
+            <p className="text-xs text-white/70">
               Welcome, <span className="font-medium">{name}</span>
             </p>
             {!!(addressLine || addressLabel) && (
@@ -519,83 +519,82 @@ async function ensureMicAccess(): Promise<boolean> {
             )}
           </div>
 
-          {/* Search + Actions row */}
-          <div className="flex-1 w-full flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <div className="pointer-events-none absolute inset-0 flex items-center px-4 text-white/25 select-none">
-                  {inputValue && suggest ? (
-                    <>
-                      <span className="opacity-0">{inputValue}</span>
-                      <span>{suggest.slice(inputValue.length)}</span>
-                    </>
-                  ) : null}
+          <div className="home-header-right">
+            <Suspense
+              fallback={
+                <div className="flex items-center gap-3 relative opacity-50">
+                  <div className="h-10 w-24 rounded-full bg-white/5" />
                 </div>
-                <input
-                  id="home-search-input"
-                  type="text"
-                  className="w-full rounded-xl border border-white/15 px-4 py-2 pr-20 bg-white/5 text-white shadow-[0_15px_45px_rgba(4,9,20,0.35)] backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/15 placeholder:text-white/40"
-                  placeholder={placeholder}
-                  value={inputValue}
-                  onChange={(e) => onInputChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') onSubmitEnter();
-                  }}
-                  aria-label="Search dishes"
-                />
-                {inputValue && (
-                  <button
-                    type="button"
-                    className="absolute right-10 top-1/2 -translate-y-1/2 h-7 w-7 grid place-items-center rounded-md bg-white/80 text-slate-900 hover:bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
-                    onClick={clearInput}
-                    aria-label="Clear search"
-                  >
-                    ×
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg border border-white/40 bg-white/90 text-slate-900 hover:bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
-                  onClick={handleVoice}
-                  aria-label="Voice search"
-                  title="Voice search"
-                  id="nav-mic"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleVoice();
-                    }
-                  }}
-                >
-                  <MicIcon />
-                </button>
-              </div>
+              }
+            >
+              <HeaderActions
+                menuOpen={menuOpen}
+                setMenuOpen={setMenuOpen}
+                priceMax={priceMax}
+                ratingMin={ratingMin}
+                distanceMax={distanceMax}
+                setPriceMax={setPriceMax}
+                setRatingMin={setRatingMin}
+                setDistanceMax={setDistanceMax}
+                applyFilters={applyFilters}
+                resetFilters={resetFilters}
+                logout={logout}
+                tokens={tokens}
+                cartId="nav-cart"
+                menuId="nav-menu"
+              />
+            </Suspense>
+          </div>
+        </div>
 
-              <Suspense
-                fallback={
-                  <div className="flex items-center gap-3 relative opacity-50">
-                    <div className="h-10 w-24 rounded-full bg-white/5" />
-                  </div>
-                }
-              >
-                <HeaderActions
-                  menuOpen={menuOpen}
-                  setMenuOpen={setMenuOpen}
-                  priceMax={priceMax}
-                  ratingMin={ratingMin}
-                  distanceMax={distanceMax}
-                  setPriceMax={setPriceMax}
-                  setRatingMin={setRatingMin}
-                  setDistanceMax={setDistanceMax}
-                  applyFilters={applyFilters}
-                  resetFilters={resetFilters}
-                  logout={logout}
-                  tokens={tokens}
-                  cartId="nav-cart"
-                  menuId="nav-menu"
-                />
-              </Suspense>
+        <div className="home-search-row">
+          <div className="relative w-full">
+            <div className="pointer-events-none absolute inset-0 flex items-center px-4 text-white/25 select-none">
+              {inputValue && suggest ? (
+                <>
+                  <span className="opacity-0">{inputValue}</span>
+                  <span>{suggest.slice(inputValue.length)}</span>
+                </>
+              ) : null}
             </div>
+            <input
+              id="home-search-input"
+              type="text"
+              className="w-full rounded-xl border border-white/15 px-4 py-2 pr-20 bg-white/5 text-white shadow-[0_15px_45px_rgba(4,9,20,0.35)] backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/15 placeholder:text-white/40"
+              placeholder={placeholder}
+              value={inputValue}
+              onChange={(e) => onInputChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onSubmitEnter();
+              }}
+              aria-label="Search dishes"
+            />
+            {inputValue && (
+              <button
+                type="button"
+                className="absolute right-10 top-1/2 -translate-y-1/2 h-7 w-7 grid place-items-center rounded-md bg-white/80 text-slate-900 hover:bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
+                onClick={clearInput}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 grid place-items-center rounded-lg border border-white/40 bg-white/90 text-slate-900 hover:bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
+              onClick={handleVoice}
+              aria-label="Voice search"
+              title="Voice search"
+              id="nav-mic"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleVoice();
+                }
+              }}
+            >
+              <MicIcon />
+            </button>
           </div>
         </div>
       </div>

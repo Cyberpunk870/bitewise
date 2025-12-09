@@ -9,6 +9,8 @@ import {
   clearPermPolicy,
   allowForThisSession,
   usePermDecision,
+  getMicPermission,
+  setMicPermission,
   type PermPolicy,
   type PermKey,
 } from '../../lib/permPrefs';
@@ -96,7 +98,7 @@ async function upsertAddress(addr: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-const KEYS: PermKey[] = ['location', 'mic'];
+const KEYS: PermKey[] = ['location', 'microphone'];
 
 function formatPasskeyTimestamp(ts?: string) {
   if (!ts) return 'Never used yet';
@@ -129,13 +131,19 @@ export default function Settings() {
 
   // Live permission decisions (reacts to policy + events)
   const decLoc = usePermDecision('location');
-  const decMic = usePermDecision('mic');
+  const decMic = usePermDecision('microphone');
 
   // Current saved policy (for radios)
-  const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>>({
-    location: getPermPolicy('location'),
-    mic: getPermPolicy('mic'),
-  });
+const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>>({
+  location: getPermPolicy('location'),
+  microphone: (() => {
+    const m = getMicPermission();
+    if (m === 'always') return 'always';
+    if (m === 'once') return 'session';
+    if (m === 'never') return 'never';
+    return undefined;
+  })(),
+});
 
   // Passkey state
   const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
@@ -290,7 +298,13 @@ export default function Settings() {
     const refresh = () => {
       setPolicies({
         location: getPermPolicy('location'),
-        mic: getPermPolicy('mic'),
+        microphone: (() => {
+          const m = getMicPermission();
+          if (m === 'always') return 'always';
+          if (m === 'once') return 'session';
+          if (m === 'never') return 'never';
+          return undefined;
+        })(),
       });
     };
     window.addEventListener('bw:perm:changed' as any, refresh as any);
@@ -302,15 +316,25 @@ export default function Settings() {
   }, []);
 
   const setPolicy = (key: PermKey, value: PermPolicy) => {
-    setPermPolicy(key, value);
+    if (key === 'microphone') {
+      const v = value === 'always' ? 'always' : value === 'session' ? 'once' : 'never';
+      setMicPermission(v);
+    } else {
+      setPermPolicy(key, value);
+    }
     setPolicies((s) => ({ ...s, [key]: value }));
     try { window.dispatchEvent(new Event('bw:perm:changed')); } catch {}
     toast.success('Saved preference');
   };
 
   const clearPolicyHandler = (key: PermKey) => {
-    clearPermPolicy(key);
-    setPolicies((s) => ({ ...s, [key]: undefined }));
+    if (key === 'microphone') {
+      setMicPermission('unknown');
+      setPolicies((s) => ({ ...s, [key]: undefined }));
+    } else {
+      clearPermPolicy(key);
+      setPolicies((s) => ({ ...s, [key]: undefined }));
+    }
     try { window.dispatchEvent(new Event('bw:perm:changed')); } catch {}
     toast.success('Cleared preference');
   };
@@ -321,7 +345,7 @@ export default function Settings() {
         const { getCurrentPosition } = await import('../../lib/location');
         await getCurrentPosition(4000);
       } catch {}
-    } else if (key === 'mic') {
+    } else if (key === 'microphone') {
       try {
         if (
           navigator.mediaDevices?.getUserMedia &&
@@ -329,7 +353,7 @@ export default function Settings() {
         ) {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           stream.getTracks().forEach((t) => t.stop());
-          allowForThisSession('mic');
+          allowForThisSession('microphone');
           try { window.dispatchEvent(new Event('bw:perm:changed')); } catch {}
         }
       } catch {}
@@ -367,7 +391,7 @@ export default function Settings() {
   const gates = useMemo(() => {
     return {
       location: gateLocation(),
-      mic: gateMic(),
+      microphone: gateMic(),
     };
   }, [decLoc, decMic]);
 
@@ -916,7 +940,7 @@ export default function Settings() {
             helper="Used to show availability and prices near you."
           />
           <PolicyRadios
-            k="mic"
+            k="microphone"
             label="Microphone"
             helper="Enables voice search for dishes and restaurants."
           />

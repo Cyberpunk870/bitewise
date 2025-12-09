@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package co.in.bitewise.app;
+package app.vercel.bitewise_five.twa;
 
 import android.content.pm.ActivityInfo;
 import android.net.Uri;

@@ -128,6 +128,12 @@ export default function Unlock() {
         sessionStorage.setItem('bw.session.phone', phone);
         sessionStorage.setItem('bw.auth.verified', '1');
         localStorage.setItem('bw.lastPhone', phone);
+        try {
+          const prof = getActiveProfile();
+          if (prof?.name) localStorage.setItem('bw:lastUserName', prof.name);
+          if (prof?.phone) localStorage.setItem('bw:lastUserPhone', prof.phone);
+          localStorage.setItem('bw:hasPasskey', 'true');
+        } catch {}
         sessionStorage.removeItem('bw.logoutReason');
         sessionStorage.removeItem('bw.requirePermRecheck');
       } catch {}

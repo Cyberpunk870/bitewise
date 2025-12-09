@@ -20,15 +20,17 @@ type Props = {
 
 export default function YummiBotPanel({ onClose, messages, typing, input, onInput, onSend, onSuggestion }: Props) {
   return (
-    <div className="fixed right-4 top-24 w-80 max-w-[calc(100vw-2rem)] glass-card z-30 animate-fade-up" role="dialog" aria-label="YummiBot assistant">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-white">
-          <span role="img" aria-label="bot">
-            🤖
-          </span>
-          YummiBot
+    <div className="fixed right-4 top-24 w-80 max-w-[calc(100vw-2rem)] glass-card z-30 animate-fade-up rounded-2xl p-4 overflow-hidden" role="dialog" aria-label="YummiBot assistant">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">🤖 YummiBot</span>
         </div>
-        <button className="text-xs text-white/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" onClick={onClose} aria-label="Close YummiBot">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-xs font-medium px-3 py-1 rounded-full bg-black/20 hover:bg-black/30 transition"
+          aria-label="Close YummiBot"
+        >
           Close
         </button>
       </div>
