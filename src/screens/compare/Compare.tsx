@@ -130,7 +130,8 @@ export default function Compare() {
         selectedNames.length > 0
           ? p.items.filter((it: any) => selectedNames.includes(String(it.name || it.menu_id || '').toLowerCase()))
           : p.items;
-      const filtered = { ...p, items: filteredItems };
+      const itemsToUse = filteredItems.length ? filteredItems : p.items;
+      const filtered = { ...p, items: itemsToUse };
       const { subtotal, total } = calcTotals(filtered as any);
       return { ...(filtered as any), subtotal, total };
     }).filter((p) => p.items.length > 0 || selectedNames.length === 0);

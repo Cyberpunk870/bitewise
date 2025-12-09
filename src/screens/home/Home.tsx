@@ -22,7 +22,7 @@ import { track } from '../../lib/track';
 import { setActiveProfileFields } from '../../lib/profileStore';
 import GlassPanel from '../../components/GlassPanel';
 const AppHeader = React.lazy(() => import('../../components/AppHeader'));
-const DishGrid = React.lazy(() => import('./HomeDishGrid'));
+import DishGrid from './HomeDishGrid';
 const HomeSectionCarousel = React.lazy(() => import('../../components/home/HomeSectionCarousel'));
 
 const DISTANCE_THRESHOLD_M = 300;
@@ -497,37 +497,24 @@ export default function Home() {
         </div>
 
         {/* Dish grid */}
-        <Suspense
-          fallback={
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 6 }).map((_, idx) => (
-                <div
-                  key={idx}
-                  className="h-[320px] rounded-2xl border border-white/5 bg-white/5 animate-pulse"
-                />
-              ))}
-            </div>
-          }
-        >
-          <DishGrid
-            activeTab={activeTab}
-            query={query}
-            filters={filters}
-            locationKey={locationKey}
-            itemsMap={itemsMap}
-            selectedId={selectedId}
-            onSelect={onDishSelect}
-            onAdd={addAndTrack}
-            onDec={(id) => dec(id)}
-          />
-        </Suspense>
+        <DishGrid
+          activeTab={activeTab}
+          query={query}
+          filters={filters}
+          locationKey={locationKey}
+          itemsMap={itemsMap}
+          selectedId={selectedId}
+          onSelect={onDishSelect}
+          onAdd={addAndTrack}
+          onDec={(id) => dec(id)}
+        />
 
         {/* Similar products preview strip */}
         {extraSections.similar.length > 0 && (
           <section className="px-4 mt-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-white/90">Similar products</h2>
-              <button className="flex items-center gap-1 text-xs font-medium text-teal-300">
+              <button className="flex items-center gap-1 text-xs font-medium text-teal-300" onClick={() => emit('bw:carousel:seeall', { section: 'similar' })}>
                 See all <span className="text-base leading-none">›</span>
               </button>
             </div>
