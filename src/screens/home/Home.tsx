@@ -493,14 +493,19 @@ export default function Home() {
             >
               {t.label}
             </button>
-          ))}
-        </div>
+        ))}
+      </div>
 
-        {/* Dish grid */}
-        <DishGrid
-          activeTab={activeTab}
-          query={query}
-          filters={filters}
+      {/* TEMP debug block */}
+      <div className="mt-4 h-24 bg-red-500 flex items-center justify-center text-black font-semibold">
+        DEBUG STRIP – should be visible
+      </div>
+
+      {/* Dish grid */}
+      <DishGrid
+        activeTab={activeTab}
+        query={query}
+        filters={filters}
           locationKey={locationKey}
           itemsMap={itemsMap}
           selectedId={selectedId}
