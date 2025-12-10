@@ -103,7 +103,7 @@ export default function Unlock() {
         throw new Error('Passkey challenge unavailable. Please try again or use OTP.');
       }
       setStatus('Waiting for your device passkey…');
-      const assertion = await startAuthentication(options);
+      const assertion = await startAuthentication({ optionsJSON: options });
       setStatus('Verifying passkey with BiteWise…');
       const verification = await verifyAuthentication(phone, assertion);
       const token = verification?.token;
@@ -153,7 +153,7 @@ export default function Unlock() {
       if (code === 'notallowederror' || code === 'aborterror') {
         const msg = 'Passkey request was cancelled.';
         setErrorMsg(msg);
-        toast.info(msg);
+        toast.push(msg);
       } else if (statusCode === 404) {
         const msg = 'No passkey found for this account. Use OTP to sign in again.';
         setErrorMsg(msg);

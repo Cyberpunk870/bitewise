@@ -14,7 +14,7 @@ import {
   type PermPolicy,
   type PermKey,
 } from '../../lib/permPrefs';
-import { gateLocation, gateMic } from '../../lib/permGate';
+import { gateLocation, gateMic, gateNotifications } from '../../lib/permGate';
 import { manualLogout } from '../../lib/session';
 import { emit } from '../../lib/events';
 import { toast } from '../../store/toast';
@@ -132,10 +132,12 @@ export default function Settings() {
   // Live permission decisions (reacts to policy + events)
   const decLoc = usePermDecision('location');
   const decMic = usePermDecision('microphone');
+  const decNotif = usePermDecision('notifications');
 
   // Current saved policy (for radios)
 const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>>({
   location: getPermPolicy('location'),
+  notifications: getPermPolicy('notifications'),
   microphone: (() => {
     const m = getMicPermission();
     if (m === 'always') return 'always';
@@ -298,6 +300,7 @@ const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>
     const refresh = () => {
       setPolicies({
         location: getPermPolicy('location'),
+        notifications: getPermPolicy('notifications'),
         microphone: (() => {
           const m = getMicPermission();
           if (m === 'always') return 'always';
@@ -330,11 +333,10 @@ const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>
   const clearPolicyHandler = (key: PermKey) => {
     if (key === 'microphone') {
       setMicPermission('unknown');
-      setPolicies((s) => ({ ...s, [key]: undefined }));
     } else {
       clearPermPolicy(key);
-      setPolicies((s) => ({ ...s, [key]: undefined }));
     }
+    setPolicies((s) => ({ ...s, [key]: undefined }));
     try { window.dispatchEvent(new Event('bw:perm:changed')); } catch {}
     toast.success('Cleared preference');
   };
@@ -392,8 +394,9 @@ const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>
     return {
       location: gateLocation(),
       microphone: gateMic(),
+      notifications: gateNotifications(),
     };
-  }, [decLoc, decMic]);
+  }, [decLoc, decMic, decNotif]);
 
   // ✅ Manual logout via unified helper
   const logout = async () => {
@@ -527,7 +530,7 @@ const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>
         <span className="text-sm">{label}</span>
       </label>
     );
-    const decision = k === 'location' ? decLoc : decMic;
+    const decision = k === 'location' ? decLoc : k === 'notifications' ? decNotif : decMic;
     return (
       <div className="rounded-2xl bg-white/70 dark:bg-white/10 p-4 shadow">
         <div className="flex items-start justify-between">
@@ -825,10 +828,10 @@ const [policies, setPolicies] = useState<Record<PermKey, PermPolicy | undefined>
                       if (navigator.share) {
                         await navigator.share({
                           title: 'BiteWise referral',
-                          text: `Use my BiteWise code ${refStatus.code} to earn coins!`,
+                          text: `Use my BiteWise code ${refStatus.code ?? ''} to earn coins!`,
                         });
                       } else if (navigator.clipboard) {
-                        await navigator.clipboard.writeText(refStatus.code);
+                        await navigator.clipboard.writeText(refStatus.code ?? '');
                         toast.success('Copied to share');
                       }
                     } catch {

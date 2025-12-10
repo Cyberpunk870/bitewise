@@ -62,8 +62,8 @@ function scheduleAnalyticsBoot() {
   if (typeof window === "undefined" || analyticsScheduled) return;
   analyticsScheduled = true;
 
-  let idleHandle: number | null = null;
-  let timer: number | null = null;
+  let idleHandle: ReturnType<typeof setTimeout> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const removers: Array<() => void> = [];
 
   const cleanup = () => {
@@ -100,7 +100,7 @@ function scheduleAnalyticsBoot() {
         { timeout: 2500 }
       );
     } else {
-      timer = window.setTimeout(() => {
+      timer = setTimeout(() => {
         timer = null;
         void ensureAnalyticsBoot();
       }, 1600);
@@ -108,7 +108,7 @@ function scheduleAnalyticsBoot() {
   };
 
   const add = (
-    name: keyof WindowEventMap,
+    name: string,
     handler: (event: Event) => void,
     options?: AddEventListenerOptions
   ) => {
@@ -130,7 +130,7 @@ function scheduleAnalyticsBoot() {
     { once: true }
   );
 
-  timer = window.setTimeout(() => {
+  timer = setTimeout(() => {
     trigger();
   }, 5000);
 }

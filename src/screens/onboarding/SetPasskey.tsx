@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { startRegistration, platformAuthenticatorIsAvailable } from '@simplewebauthn/browser';
-import { getLastRoute } from '../../lib/profileStore';
+import { getActiveProfile, getLastRoute } from '../../lib/profileStore';
 import { toast } from '../../store/toast';
 import { emit } from '../../lib/events';
 import {
@@ -99,7 +99,7 @@ export default function SetPasskey() {
       const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
       const label = ua ? ua.split(') ')[0]?.slice(0, 60) ?? 'Device passkey' : undefined;
       const options = await requestRegistrationOptions(label);
-      const credential = await startRegistration(options);
+      const credential = await startRegistration({ optionsJSON: options });
       await verifyRegistration(credential, { label, userAgent: ua });
       emit('bw:passkey:set', null);
       toast.success(existing ? 'Passkey updated' : 'Passkey set');
@@ -115,7 +115,7 @@ export default function SetPasskey() {
     } catch (err: any) {
       const code = String(err?.name || '').toLowerCase();
       if (code === 'notallowederror' || code === 'aborterror') {
-        toast.info('Passkey setup was cancelled.');
+        toast.push('Passkey setup was cancelled.');
       } else {
         console.error('passkey registration failed', err);
         toast.error(err?.message || 'Could not register passkey.');

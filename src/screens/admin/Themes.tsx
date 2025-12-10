@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 
 type Promo = {
-  title: string;
+  title?: string;
   body?: string;
   ctaLabel?: string;
   href?: string;

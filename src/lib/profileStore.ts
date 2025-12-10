@@ -6,6 +6,7 @@ export type Profile = {
   name: string;
   addressLabel?: string;
   addressLine?: string;
+  city?: string;
   lat?: number;
   lng?: number;
   passkey?: string;

@@ -2,7 +2,7 @@
 // Lightweight seasonal theme + promo slot resolver.
 
 export type PromoSlot = {
-  title: string;
+  title?: string;
   body?: string;
   ctaLabel?: string;
   href?: string;

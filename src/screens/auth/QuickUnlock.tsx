@@ -61,7 +61,7 @@ export default function QuickUnlock() {
       const options = await requestAuthenticationOptions(lastPhone);
       if (!options || !options.challenge) throw new Error('Passkey challenge unavailable. Use OTP.');
       setStatus('Waiting for your device…');
-      const assertion = await startAuthentication(options);
+      const assertion = await startAuthentication({ optionsJSON: options });
       setStatus('Verifying…');
       const verification = await verifyAuthentication(lastPhone, assertion);
       const token = verification?.token;

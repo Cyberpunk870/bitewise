@@ -11,7 +11,7 @@ export type MiniItem = {
 
 type MiniCardProps = {
   item: MiniItem;
-  onAdd?: (id: string) => void;
+  onAdd?: (input: { id: string; name: string }) => void;
 };
 
 function MiniProductCard({ item, onAdd }: MiniCardProps) {
@@ -36,7 +36,7 @@ function MiniProductCard({ item, onAdd }: MiniCardProps) {
         <button
           type="button"
           className="px-4 py-1 rounded-full border border-emerald-400 text-[11px] font-semibold text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25 flex-1 text-center"
-          onClick={() => onAdd?.(item.id)}
+          onClick={() => onAdd?.({ id: item.id, name: item.title })}
         >
           ADD
         </button>
@@ -50,7 +50,7 @@ type Props = {
   subtitle?: string;
   items: MiniItem[];
   onSeeAll?: () => void;
-  onAdd?: (id: string) => void;
+  onAdd?: (input: { id: string; name: string }) => void;
 };
 
 export default function HomeSectionCarousel({ title, subtitle, items, onSeeAll, onAdd }: Props) {

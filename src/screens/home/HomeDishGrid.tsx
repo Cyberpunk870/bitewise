@@ -189,8 +189,8 @@ export default function HomeDishGrid({
   const deferredLocationKey = useDeferredValue(locationKey);
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    let idleHandle: number | null = null;
+useEffect(() => {
+    let idleHandle: ReturnType<typeof setTimeout> | number | null = null;
     const mark = () => setHydrated(true);
     if ('requestIdleCallback' in window) {
       idleHandle = (window as any).requestIdleCallback(
@@ -201,7 +201,7 @@ export default function HomeDishGrid({
         { timeout: 2000 }
       );
     } else {
-      idleHandle = window.setTimeout(() => {
+      idleHandle = setTimeout(() => {
         idleHandle = null;
         mark();
       }, 1500);
@@ -211,7 +211,7 @@ export default function HomeDishGrid({
         if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
           (window as any).cancelIdleCallback(idleHandle);
         } else {
-          window.clearTimeout(idleHandle);
+          clearTimeout(idleHandle);
         }
       }
     };
@@ -260,6 +260,15 @@ export default function HomeDishGrid({
   const limitedList = hydrated ? visibleDishes : visibleDishes.slice(0, 6);
 
   const qtyOf = (id: string | number) => (itemsMap as any)?.[String(id)]?.qty ?? 0;
+
+  // Debug: surface runtime state to diagnose empty grid
+  console.log('home-dish-grid', {
+    catalog: DISH_CATALOG.length,
+    visible: visibleDishes.length,
+    hydrated,
+    query,
+    filters,
+  });
 
   return (
     <>

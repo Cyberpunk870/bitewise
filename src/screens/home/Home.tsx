@@ -73,9 +73,9 @@ export default function Home() {
     emit('bw:dish:add', { id, name });
   }
   const addById = useCallback(
-    (id: string) => {
+    ({ id, name }: { id: string; name?: string }) => {
       const hit = DISH_CATALOG.find((d: any) => String(d.id) === String(id));
-      addAndTrack({ id, name: hit?.name || 'Item' });
+      addAndTrack({ id, name: name || hit?.name || 'Item' });
     },
     [add]
   );

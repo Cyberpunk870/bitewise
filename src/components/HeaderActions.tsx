@@ -104,7 +104,7 @@ export default function HeaderActions({
         <button
           type="button"
           className="h-9 w-10 grid place-items-center rounded-xl border border-white/40 bg-white/90 text-slate-900 shadow-[0_10px_30px_rgba(5,9,20,0.35)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-800"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => setMenuOpen(!menuOpen)}
           aria-expanded={menuOpen}
           aria-haspopup="menu"
           title="Menu"
@@ -262,4 +262,3 @@ function Slider({
     </div>
   );
 }
-

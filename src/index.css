@@ -216,3 +216,27 @@
 .logo-splash {
   animation: logo-splash 1.05s ease forwards;
 }
+
+/* --- BiteWise: force the home dish grid to be visible --- */
+#home-dish-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 1.5rem 1rem 1.5rem;
+  background: transparent !important;
+  min-height: auto !important;
+  height: auto !important;
+  position: relative;
+  overflow: visible !important;
+  z-index: 1;
+}
+
+#home-dish-grid::before,
+#home-dish-grid::after {
+  content: none !important;
+}
+
+#home-dish-grid > * {
+  opacity: 1 !important;
+  visibility: visible !important;
+}

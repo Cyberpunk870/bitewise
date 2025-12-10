@@ -35,7 +35,7 @@ const FEED_KIND = import.meta.env.VITE_FEED || 'dummy';
 export default function AppShell() {
   const nav = useNavigate();
   const location = useLocation();
-  const timerRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [offline, setOffline] = React.useState<boolean>(() => {
     if (typeof navigator === 'undefined') return false;
     return navigator.onLine === false;
@@ -174,20 +174,18 @@ export default function AppShell() {
       const data: any = event.data;
       if (!data || typeof data !== 'object') return;
       if (data.type === 'SW_UPDATED') {
-        toast.success('BiteWise just updated', {
-          action: {
-            label: 'Reload',
-            onClick: () => {
-              navigator.serviceWorker
-                .getRegistration()
-                .then((reg) => {
-                  reg?.waiting?.postMessage({ type: 'SKIP_WAITING' });
-                  window.setTimeout(() => window.location.reload(), 150);
-                })
-                .catch(() => window.location.reload());
-            },
-          },
-        });
+        toast.push('BiteWise just updated');
+        try {
+          navigator.serviceWorker
+            .getRegistration()
+            .then((reg) => {
+              reg?.waiting?.postMessage({ type: 'SKIP_WAITING' });
+              window.setTimeout(() => window.location.reload(), 150);
+            })
+            .catch(() => window.location.reload());
+        } catch {
+          window.location.reload();
+        }
       }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
@@ -318,7 +316,7 @@ useEffect(() => {
   useEffect(() => {
     let stop: (() => void) | null = null;
     let cancelled = false;
-    let idleHandle: number | null = null;
+    let idleHandle: ReturnType<typeof setTimeout> | ReturnType<typeof window.setTimeout> | null = null;
 
     const boot = async () => {
       try {
@@ -339,7 +337,7 @@ useEffect(() => {
         { timeout: 2000 }
       );
     } else {
-      idleHandle = window.setTimeout(() => {
+      idleHandle = setTimeout(() => {
         idleHandle = null;
         boot();
       }, 1200);
@@ -390,10 +388,10 @@ useEffect(() => {
       clearTimer();
       // ⛔️ Do not arm an idle logout if there is no active session OR we're inside onboarding/auth
       if (!hasActiveSession() || inAuthContext()) return;
-      timerRef.current = window.setTimeout(async () => {
-  // 1. mark reason + remember phone for prefill
-  const lastPhone =
-    sessionStorage.getItem('bw.session.phone') || '' ;
+      timerRef.current = setTimeout(async () => {
+        // 1. mark reason + remember phone for prefill
+        const lastPhone =
+          sessionStorage.getItem('bw.session.phone') || '' ;
 
   try {
     sessionStorage.setItem('bw.logoutReason', 'idle');
@@ -490,15 +488,15 @@ useEffect(() => {
 
   /* Offline/online detection with toasts */
   useEffect(() => {
-    const handle = () => {
-      const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
-      setOffline(isOffline);
-      if (isOffline) {
-        toast.error('You are offline. We will retry when back online.', { duration: 4000 });
-      } else {
-        toast.success('Back online', { duration: 2000 });
-      }
-    };
+        const handle = () => {
+          const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+          setOffline(isOffline);
+          if (isOffline) {
+            toast.error('You are offline. We will retry when back online.');
+          } else {
+            toast.success('Back online');
+          }
+        };
     window.addEventListener('online', handle);
     window.addEventListener('offline', handle);
     handle();
@@ -523,7 +521,7 @@ useEffect(() => {
       }
     };
 
-    let idleId: number | null = null;
+    let idleId: ReturnType<typeof setTimeout> | ReturnType<typeof window.setTimeout> | null = null;
     const idleCb = () => {
       idleId = null;
       boot();
@@ -532,7 +530,7 @@ useEffect(() => {
     if ('requestIdleCallback' in window) {
       idleId = (window as any).requestIdleCallback(idleCb, { timeout: 2000 });
     } else {
-      idleId = window.setTimeout(idleCb, 1200);
+      idleId = setTimeout(idleCb, 1200);
     }
 
     return () => {
@@ -552,7 +550,7 @@ useEffect(() => {
   useEffect(() => {
     let stop: (() => void) | null = null;
     let cancelled = false;
-    let timer: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | ReturnType<typeof window.setTimeout> | null = null;
 
     const boot = async () => {
       try {
@@ -564,7 +562,7 @@ useEffect(() => {
       }
     };
 
-    timer = window.setTimeout(boot, 1500);
+    timer = setTimeout(boot, 1500);
 
     return () => {
       cancelled = true;

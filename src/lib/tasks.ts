@@ -35,10 +35,11 @@ export type Task = {
   target: number;
   progress: number;
   reward: number;  // Bites
+  points: number;
   day: number;
-  dueTs?: number;
-  ready?: boolean;
-  done?: boolean;
+  dueTs?: number | null;
+  ready: boolean;
+  done: boolean;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -118,7 +119,7 @@ function markMissionDirty() {
   if (!USE_CLOUD_MISSIONS || typeof window === 'undefined' || missionHydrating) return;
   storageSet(LS_REMOTE_VERSION, String(Date.now()));
   if (missionPushTimer) return;
-  missionPushTimer = window.setTimeout(() => {
+  missionPushTimer = setTimeout(() => {
     missionPushTimer = null;
     pushMissionStateNow().catch(() => {});
   }, 1200);
@@ -142,10 +143,11 @@ async function pushMissionStateNow() {
           title: task.title,
           target: task.target,
           reward: task.reward,
+          points: task.points ?? task.reward,
           day: task.day,
           progress: task.progress,
-          ready: task.ready,
-          done: task.done,
+          ready: Boolean(task.ready),
+          done: Boolean(task.done),
           dueTs: typeof task.dueTs === 'number' ? task.dueTs : null,
         })),
       });
@@ -169,7 +171,14 @@ function applyRemoteMissionState(state: {
   missionHydrating = true;
   try {
     storageSet(LS_DAYKEY, state.dayKey || new Date().toDateString());
-    setTasks(state.tasks || [], { skipDirty: true });
+    const normalized = (state.tasks || []).map((t) => ({
+      ...t,
+      ready: Boolean(t.ready),
+      done: Boolean(t.done),
+      points: typeof t.points === 'number' ? t.points : t.reward,
+      dueTs: typeof t.dueTs === 'number' ? t.dueTs : null,
+    }));
+    setTasks(normalized, { skipDirty: true });
     setNumber(LS_TOTAL_COMPLETED, state.totalCompleted || 0);
     setNumber(LS_STREAK_CUR, state.streak?.current || 0);
     setNumber(LS_STREAK_BEST, state.streak?.best || 0);
@@ -339,7 +348,7 @@ function pickUnique<T extends { id: string; kind: string; title: string }>(
 /* -------------------------------------------------------------------------- */
 /*                           100 Task Definitions                             */
 /* -------------------------------------------------------------------------- */
-const TASKS_100: Omit<Task, 'progress' | 'ready' | 'done' | 'dueTs'>[] = [
+const TASKS_100: Omit<Task, 'progress' | 'ready' | 'done' | 'dueTs' | 'points'>[] = [
   { id:'t1-search', kind:'search', title:'Make your first search', target:1, reward:10, day:1 },
   { id:'t2-browse', kind:'browse', title:'Browse 5 dishes', target:5, reward:12, day:1 },
   { id:'t3-compare', kind:'compare_done', title:'Compare prices once', target:1, reward:15, day:1 },
@@ -378,7 +387,7 @@ function seedToday(): Task[] {
   const due = midnightTs();
   const pool = TASKS_100.filter(t => t.day === bucket);
   const fresh = pickUnique(pool, 3).map(t => ({
-    ...t, progress:0, ready:false, done:false, dueTs:due,
+    ...t, progress:0, ready:false, done:false, dueTs:due, points: t.reward,
   }));
   setTasks(fresh);
   localStorage.setItem(LS_DAYKEY, todayKey);

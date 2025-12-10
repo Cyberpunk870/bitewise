@@ -4,7 +4,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { ensureAdmin } from "../lib/firebaseAdmin";
 
 type Promo = {
-  title: string;
+  title?: string;
   body?: string;
   ctaLabel?: string;
   href?: string;
