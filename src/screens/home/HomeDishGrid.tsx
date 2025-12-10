@@ -123,8 +123,9 @@ const DishCard = memo(function DishCard({
       style={{ contain: 'layout paint size' } as any}
       onClick={onSelect}
     >
-      <div className="w-full aspect-[4/3] overflow-hidden bg-white/5">
-        <picture className="block h-full w-full">
+      <div className="relative w-full overflow-hidden bg-white/5">
+        <div className="block w-full pt-[75%]" aria-hidden="true" />
+        <picture className="absolute inset-0 block h-full w-full">
           {sources.avif && <source srcSet={sources.avif} type="image/avif" />}
           {sources.webp && <source srcSet={sources.webp} type="image/webp" />}
           <img
