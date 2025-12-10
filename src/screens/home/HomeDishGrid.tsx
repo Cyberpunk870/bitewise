@@ -7,11 +7,21 @@ import React, {
   useState,
 } from 'react';
 import { DISH_CATALOG } from '../../data/dishCatalog';
-import { getDishImage, getPictureSources, placeholderDishUrl } from '../../lib/images';
+import {
+  getDishImage,
+  getPictureSources,
+  placeholderDishUrl,
+} from '../../lib/images';
 import { inferCategory } from '../../data/categoryImages';
 import type { FilterState, TabKey } from './types';
 
-type DishVM = { id: string; name: string; cuisine?: string; rating?: number; image: string };
+type DishVM = {
+  id: string;
+  name: string;
+  cuisine?: string;
+  rating?: number;
+  image: string;
+};
 
 type Props = {
   activeTab: TabKey;
@@ -27,7 +37,10 @@ type Props = {
 
 function Star({ filled }: { filled: boolean }) {
   return (
-    <svg viewBox="0 0 20 20" className="h-[14px] w-[14px] inline-block align-[-1px]">
+    <svg
+      viewBox="0 0 20 20"
+      className="h-[14px] w-[14px] inline-block align-[-1px]"
+    >
       <path
         d="M10,2 11.7,7 16,7.4 14.3,10.3 13.6,15.5 10,16.5 5.7,13 6.6,8.4 7.7,7.16"
         fill={filled ? 'currentColor' : 'none'}
@@ -37,9 +50,13 @@ function Star({ filled }: { filled: boolean }) {
     </svg>
   );
 }
+
 function StarHalf() {
   return (
-    <svg viewBox="0 0 20 20" className="h-[14px] w-[14px] inline-block align-[-1px]">
+    <svg
+      viewBox="0 0 20 20"
+      className="h-[14px] w-[14px] inline-block align-[-1px]"
+    >
       <linearGradient id="halfFill" x1="0" y1="0" x2="1" y2="0">
         <stop offset="50%" stopColor="currentColor" />
         <stop offset="50%" stopColor="transparent" />
@@ -53,16 +70,22 @@ function StarHalf() {
     </svg>
   );
 }
+
 function Stars({ value = 4.2 }: { value?: number }) {
   const v = Math.max(0, Math.min(5, value));
   const full = Math.floor(v);
   const half = v - full > 0.5 ? 1 : 0;
   const empty = 5 - full - half;
+
   return (
     <>
-      {Array.from({ length: full }).map((_, i) => (<Star key={`s${i}`} filled />))}
+      {Array.from({ length: full }).map((_, i) => (
+        <Star key={`s${i}`} filled />
+      ))}
       {half ? <StarHalf key="half" /> : null}
-      {Array.from({ length: empty }).map((_, i) => (<Star key={`e${i}`} filled={false} />))}
+      {Array.from({ length: empty }).map((_, i) => (
+        <Star key={`e${i}`} filled={false} />
+      ))}
     </>
   );
 }
@@ -87,11 +110,11 @@ const DishCard = memo(function DishCard({
   priority?: boolean;
 }) {
   const sources = getPictureSources(d.image || placeholderDishUrl());
+
   return (
     <div
       className={[
-        'relative z-20 bg-white/6 rounded-3xl border border-white/10 overflow-hidden',
-        'flex flex-col text-white shadow-lg shadow-black/30 transition',
+        'bg-white/6 rounded-3xl border border-white/10 overflow-hidden flex flex-col text-white shadow-lg shadow-black/30 transition',
         selected ? 'ring-2 ring-white/70' : '',
       ].join(' ')}
       role="button"
@@ -122,11 +145,17 @@ const DishCard = memo(function DishCard({
       </div>
 
       <div className="flex-1 px-3 pt-2 pb-1 flex flex-col gap-1">
-        <p className="text-[13px] font-semibold leading-tight line-clamp-2">{d.name}</p>
-        {d.cuisine ? <p className="text-[11px] text-white/60">{d.cuisine}</p> : null}
+        <p className="text-[13px] font-semibold leading-tight line-clamp-2">
+          {d.name}
+        </p>
+        {d.cuisine ? (
+          <p className="text-[11px] text-white/60">{d.cuisine}</p>
+        ) : null}
         {typeof d.rating === 'number' && (
           <div className="flex items-center gap-1 text-[11px] text-white/70">
-            <span className="text-yellow-300"><Stars value={d.rating} /></span>
+            <span className="text-yellow-300">
+              <Stars value={d.rating} />
+            </span>
             <span>{d.rating.toFixed(1)}</span>
           </div>
         )}
@@ -191,15 +220,19 @@ export default function HomeDishGrid({
   const deferredLocationKey = useDeferredValue(locationKey);
   const [hydrated, setHydrated] = useState(false);
 
+  // keep the idle hydration (performance) logic
   useEffect(() => {
     let idleHandle: ReturnType<typeof window.setTimeout> | null = null;
     const mark = () => setHydrated(true);
 
     if ('requestIdleCallback' in window) {
-      idleHandle = (window as any).requestIdleCallback(() => {
-        idleHandle = null;
-        mark();
-      }, { timeout: 2000 });
+      idleHandle = (window as any).requestIdleCallback(
+        () => {
+          idleHandle = null;
+          mark();
+        },
+        { timeout: 2000 },
+      );
     } else {
       idleHandle = setTimeout(() => {
         idleHandle = null;
@@ -209,7 +242,10 @@ export default function HomeDishGrid({
 
     return () => {
       if (idleHandle != null) {
-        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+        if (
+          'cancelIdleCallback' in window &&
+          typeof (window as any).cancelIdleCallback === 'function'
+        ) {
           (window as any).cancelIdleCallback(idleHandle);
         } else {
           window.clearTimeout(idleHandle);
@@ -218,52 +254,54 @@ export default function HomeDishGrid({
     };
   }, []);
 
+  // 🔴 TEMP: always map from catalog, ignore filters/tabs while we debug
   const visibleDishes = useMemo(() => {
-    let list = DISH_CATALOG.slice(0);
-    switch (activeTab) {
-      case 'popular':
-        list = list.filter((d: any) => d.popular === true || (d.tags || []).includes('popular'));
-        break;
-      case 'frequent':
-        list = list.filter((_: any, i: number) => i % 2 === 0);
-        break;
-      case 'value':
-        list = list.filter((d: any) => typeof d.price === 'number' && d.price < 200);
-        break;
-      default:
-        break;
-    }
-    if (deferredFilters) {
-      const { priceMax, ratingMin, distanceMax } = deferredFilters;
-      list = list.filter((d: any) => {
-        const price = typeof d.price === 'number' ? d.price : undefined;
-        const distance = (d as any).distance as number | undefined;
-        const rating = (d as any).rating as number | undefined;
-        const okP = typeof priceMax === 'number' ? (price ?? Infinity) <= priceMax : true;
-        const okR = typeof ratingMin === 'number' ? (rating ?? -Infinity) >= ratingMin : true;
-        const okD = typeof distanceMax === 'number' ? (distance ?? Infinity) <= distanceMax : true;
-        return okP && okR && okD;
-      });
-    }
-    if (deferredQuery.trim()) {
-      const q = deferredQuery.trim().toLowerCase();
-      list = list.filter((d: any) => d.name.toLowerCase().includes(q));
-    }
-    return (list as any[]).map((d: any) => ({
+    const list = DISH_CATALOG || [];
+    const mapped: DishVM[] = (list as any[]).map((d: any) => ({
       id: String(d.id),
       name: d.name,
       cuisine: d.cuisine,
       rating: d.rating,
-      image: getDishImage(d.name, d.imageUrl, d.category || inferCategory(d.name)),
-    })) as DishVM[];
-  }, [activeTab, deferredQuery, deferredFilters, deferredLocationKey, deferredItems]);
+      image: getDishImage(
+        d.name,
+        d.imageUrl,
+        d.category || inferCategory(d.name),
+      ),
+    }));
+
+    console.log('[HomeDishGrid] counts', {
+      catalog: list.length,
+      visible: mapped.length,
+      filters: deferredFilters,
+      query: deferredQuery,
+    });
+
+    return mapped;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deferredFilters, deferredItems, deferredLocationKey, deferredQuery]);
 
   const limitedList = hydrated ? visibleDishes : visibleDishes.slice(0, 6);
-
   const qtyOf = (id: string | number) => (itemsMap as any)?.[String(id)]?.qty ?? 0;
+
+  // TEMP: debugger + hard-coded test cards to confirm wiring/rendering
+  debugger; // remove after verifying
+  const testCards = (
+    <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 px-4 pb-6 items-stretch">
+      {['Test 1', 'Test 2', 'Test 3', 'Test 4', 'Test 5', 'Test 6'].map((label) => (
+        <div
+          key={label}
+          className="h-32 rounded-3xl bg-emerald-500/80 flex items-center justify-center text-sm font-semibold"
+        >
+          {label}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <>
+      {testCards}
+
       <section
         id="home-dish-grid"
         className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-3 px-4 pb-6 items-stretch"
@@ -272,6 +310,7 @@ export default function HomeDishGrid({
           const id = String(d.id);
           const qty = qtyOf(id);
           const selected = selectedId === id;
+
           return (
             <DishCard
               key={id}
