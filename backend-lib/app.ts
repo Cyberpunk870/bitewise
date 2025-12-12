@@ -288,6 +288,9 @@ app.use("/api/leaderboard", ...secureChain, leaderboard);
 app.use("/api/achievements", ...secureChain, achievements);
 app.use("/api/missions", ...secureChain, missions);
 app.use("/api/tasks", ...secureChain, tasks);
+// Dishes search/proxy
+import dishesRouter from "./backend-api/dishes";
+app.use("/api/dishes", ...secureChain, dishesRouter);
 app.use("/api/referral", ...secureChain, referral);
 app.use("/api/ingest", ...secureChain, ingest);
 app.use("/api/metrics/ingest", metricsIngest);

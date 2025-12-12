@@ -7,6 +7,8 @@ export default function ReturnBanner() {
   const [visible, setVisible] = useState(false);
   const [label, setLabel] = useState<string>('');
   const timerRef = useRef<number | null>(null);
+   // auto-dismiss timer once visible
+  const autoHideRef = useRef<number | null>(null);
 
   const showWithDelay = () => {
     if (timerRef.current) {
@@ -41,10 +43,29 @@ export default function ReturnBanner() {
     return () => {
       off1(); off2();
       if (timerRef.current) window.clearTimeout(timerRef.current);
+      if (autoHideRef.current) window.clearTimeout(autoHideRef.current);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', refresh);
     };
   }, []);
+
+  // when visible, schedule an auto-dismiss so it doesn't stick forever
+  useEffect(() => {
+    if (visible) {
+      if (autoHideRef.current) window.clearTimeout(autoHideRef.current);
+      autoHideRef.current = window.setTimeout(() => {
+        setVisible(false);
+      }, 9000); // auto-hide after ~9s
+    } else {
+      if (autoHideRef.current) {
+        window.clearTimeout(autoHideRef.current);
+        autoHideRef.current = null;
+      }
+    }
+    return () => {
+      if (autoHideRef.current) window.clearTimeout(autoHideRef.current);
+    };
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -71,9 +92,9 @@ export default function ReturnBanner() {
               try { clearPendingReturn(); } catch {}
               setVisible(false);
             }}
-            aria-label="Not yet placed"
+            aria-label="Skip for now"
           >
-            Not yet
+            Skip for now
           </button>
         </div>
         <button

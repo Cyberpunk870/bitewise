@@ -2,7 +2,8 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../store/cart';
-import { DISH_CATALOG, allDishNames } from '../../data/dishCatalog';
+import { DISH_CATALOG } from '../../data/dishCatalog';
+import type { DishRecord } from '../../data/dishCatalog';
 import { getDishImage, placeholderDishUrl } from '../../lib/images';
 import type { FilterState, TabKey } from './types';
 import { ensureActiveProfile, getActiveProfile } from '../../lib/profileStore';
@@ -23,6 +24,8 @@ import { setActiveProfileFields } from '../../lib/profileStore';
 import GlassPanel from '../../components/GlassPanel';
 const AppHeader = React.lazy(() => import('../../components/AppHeader'));
 import DishGrid from './HomeDishGrid';
+import { fetchHomeDishes, type HomeDish } from '../../lib/homeDishes';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 const DISTANCE_THRESHOLD_M = 300;
 const SHOW_DEBUG = false;
@@ -50,18 +53,18 @@ function formatDistance(meters: number) {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-function useRecentThumbs(itemsMap: Record<string, any>) {
+function useRecentThumbs(itemsMap: Record<string, any>, dishes: DishRecord[]) {
   return useMemo(() => {
     const e = Object.values(itemsMap || {});
     e.sort((a: any, b: any) => (b?.updatedAt || 0) - (a?.updatedAt || 0));
     return e.slice(0, 3).map((item: any) => {
       const id = String(item.id);
-      const hit = DISH_CATALOG.find((d) => String(d.id) === id);
+      const hit = dishes.find((d) => String(d.id) === id);
       const img = hit ? getDishImage(hit.name, hit.imageUrl, hit.category) : placeholderDishUrl();
       const name = hit?.name || 'Item';
       return { id, img, name };
     });
-  }, [itemsMap]);
+  }, [itemsMap, dishes]);
 }
 
 function useSeasonalThemes() {
@@ -142,33 +145,77 @@ export default function Home() {
   const [suggested, setSuggested] = useState<string | null>(null);
   const [liveFlow, setLiveFlow] = useState<'idle' | 'working' | 'done'>('idle');
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [dishes, setDishes] = useState<HomeDish[]>(DISH_CATALOG as HomeDish[]);
+  const [city, setCity] = useState<string | undefined>(undefined);
+  const [address, setAddress] = useState<string | undefined>(undefined);
+  const [pincode, setPincode] = useState<string | undefined>(undefined);
+  const derivePincode = (src?: string | null) => {
+    if (!src) return undefined;
+    const match = src.match(/\b(\d{6})\b/);
+    return match ? match[1] : undefined;
+  };
+  const fallbackPincode = '560001';
+  const [authReady, setAuthReady] = useState(false);
+  const [userLoggedIn, setUserLoggedIn] = useState(false);
 
   const currentTheme = useSeasonalThemes();
 
-  const recentThumbs = useRecentThumbs(itemsMap);
+  const recentThumbs = useRecentThumbs(itemsMap, dishes);
 
   // ensure profile is ready
   useEffect(() => {
     ensureActiveProfile();
   }, []);
 
+  // watch auth state
+  useEffect(() => {
+    const auth = getAuth();
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setAuthReady(true);
+      setUserLoggedIn(!!u);
+    });
+    return () => unsub();
+  }, []);
+
   // hydrate dish names into voice search
   useEffect(() => {
     try {
-      const names = allDishNames;
+      const names = dishes.map((d) => d.name);
       window.dispatchEvent(new CustomEvent('bw:dishes:names', { detail: names }));
     } catch {}
-  }, []);
+  }, [dishes]);
 
-  // update location key when profile changes
+  // update location key when profile changes and load dishes
   useEffect(() => {
     try {
       const profile = getActiveProfile();
       const key = profile ? `${profile.lat || ''}:${profile.lng || ''}:${profile.addressLabel || ''}` : '';
       setLocationKey(key);
       setActLabel(profile?.addressLabel || null);
+      setAddress(profile?.addressLine || undefined);
+      setPincode(derivePincode(profile?.addressLine || profile?.addressLabel || undefined) || fallbackPincode);
+      setCity(profile?.city || undefined);
+      (async () => {
+        if (!authReady || !userLoggedIn) return;
+        try {
+          const list = await fetchHomeDishes(
+            {
+              city: profile?.city || undefined,
+              address: profile?.addressLine || undefined,
+              pincode: derivePincode(profile?.addressLine || profile?.addressLabel || undefined) || fallbackPincode,
+            },
+            query
+          );
+          setDishes(list);
+        } catch (err: any) {
+          if (err?.message === 'not-authenticated') {
+            // wait for auth
+            return;
+          }
+        }
+      })();
     } catch {}
-  }, []);
+  }, [authReady, userLoggedIn]);
 
   // live location flow
   useEffect(() => {
@@ -223,7 +270,7 @@ export default function Home() {
   };
 
   const filteredCatalog = useMemo(() => {
-    let list = DISH_CATALOG.slice(0);
+    let list = dishes.slice(0);
     switch (activeTab) {
       case 'popular':
         list = list.filter((d: any) => d.popular === true || (d.tags || []).includes('popular'));
@@ -249,12 +296,34 @@ export default function Home() {
         return okP && okR && okD;
       });
     }
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      list = list.filter((d: any) => d.name.toLowerCase().includes(q));
-    }
     return list;
-  }, [activeTab, filters, query]);
+  }, [activeTab, filters, dishes]);
+
+  // live fetch on query/city change with light debounce
+  useEffect(() => {
+    if (!authReady || !userLoggedIn) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const run = async () => {
+        try {
+          const list = await fetchHomeDishes(
+            { city, address, pincode },
+            query
+          );
+          if (!cancelled) setDishes(list);
+        } catch (err: any) {
+          if (err?.message === 'not-authenticated') {
+            return;
+          }
+        }
+      };
+      void run();
+    }, query ? 300 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query, city, address, pincode, authReady, userLoggedIn]);
 
   // location permission helper
   const requestLoc = useCallback(async () => {
@@ -364,6 +433,7 @@ export default function Home() {
             query={query}
             filters={filters}
             locationKey={locationKey}
+            dishes={filteredCatalog}
             itemsMap={itemsMap}
             selectedId={selectedId}
             onSelect={onDishSelect}

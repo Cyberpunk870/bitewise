@@ -22,6 +22,7 @@ type Props = {
   onSelect: (id: string) => void;
   onAdd: (input: { id: string; name: string }) => void;
   onDec: (id: string) => void;
+  dishes?: any[];
 };
 
 function Star({ filled }: { filled: boolean }) {
@@ -117,6 +118,32 @@ const DishCard = memo(function DishCard({
             alt={d.name}
           />
         </picture>
+        {selected && (
+          <div className="absolute inset-0 bg-[rgba(4,9,20,0.88)] backdrop-blur-sm flex items-end justify-center p-3 gap-2">
+            {qty > 0 ? (
+              <div
+                className="grid grid-cols-[36px,52px,36px] items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white px-2 py-2 shadow-lg shadow-black/40"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button className="px-3 text-xl leading-none text-white hover:text-rose-200" onClick={onDec}>
+                  -
+                </button>
+                <div className="text-center select-none font-semibold">{qty}</div>
+                <button className="px-3 text-xl leading-none text-white hover:text-lime-200" onClick={onInc}>
+                  +
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="text-sm w-full rounded-xl px-4 py-2 font-semibold bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] shadow-lg shadow-rose-500/30"
+                onClick={onAddFirst}
+              >
+                Add to cart
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div className="mt-1 space-y-1 min-h-[48px]">
         <p className="font-semibold text-white leading-snug">{d.name}</p>
@@ -126,33 +153,6 @@ const DishCard = memo(function DishCard({
             <span className="text-yellow-300"><Stars value={d.rating} /></span>
             <span>{d.rating.toFixed(1)}</span>
           </p>
-        )}
-      </div>
-      <div className="mt-2">
-        {qty > 0 ? (
-          <div
-            className="grid grid-cols-[36px,52px,36px] items-center gap-2 rounded-full border border-white/20 bg-white/10 text-white px-2 py-2 shadow-lg shadow-black/40"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button className="px-3 text-xl leading-none text-white hover:text-rose-200" onClick={onDec}>
-              -
-            </button>
-            <div className="text-center select-none font-semibold">{qty}</div>
-            <button className="px-3 text-xl leading-none text-white hover:text-lime-200" onClick={onInc}>
-              +
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="text-sm w-full rounded-xl px-4 py-2 font-semibold bg-gradient-to-r from-[#fde68a] via-[#f9a8d4] to-[#c084fc] text-[#0b1120] shadow-lg shadow-rose-500/30"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddFirst();
-            }}
-          >
-            Add to cart
-          </button>
         )}
       </div>
     </div>
@@ -169,6 +169,7 @@ export default function HomeDishGrid({
   onSelect,
   onAdd,
   onDec,
+  dishes,
 }: Props) {
   const deferredQuery = useDeferredValue(query);
   const deferredFilters = useDeferredValue(filters);
@@ -177,31 +178,33 @@ export default function HomeDishGrid({
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    // requestIdleCallback returns a numeric handle; setTimeout can be number/Timeout depending on libs.
-    let idleHandle: number | ReturnType<typeof globalThis.setTimeout> | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null =null;
+    let idleId: number | null = null;
     const mark = () => setHydrated(true);
     if ('requestIdleCallback' in window) {
-      idleHandle = (window as any).requestIdleCallback(
+      idleId = (window as any).requestIdleCallback(
         () => {
-          idleHandle = null;
+          idleId = null;
           mark();
         },
         { timeout: 2000 }
       );
     } else {
-      idleHandle = globalThis.setTimeout(() => {
-        idleHandle = null;
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
         mark();
       }, 1500);
     }
+
     return () => {
-      if (idleHandle != null) {
-        if ('cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
-          (window as any).cancelIdleCallback(idleHandle);
-        } else {
-          globalThis.clearTimeout(idleHandle as any);
-        }
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
       }
+
+      if ( idleId != null &&
+        'cancelIdleCallback' in window && typeof (window as any).cancelIdleCallback === 'function') {
+          (window as any).cancelIdleCallback(idleId);
+        } 
     };
   }, []);
 

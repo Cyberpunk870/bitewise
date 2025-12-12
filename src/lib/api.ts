@@ -34,10 +34,10 @@ async function waitForFirebaseUser(maxMs = 8000): Promise<User | null> {
 }
 
 // --- Helper to attach Firebase ID token (with auto refresh on 401) ---
-async function getBearerToken(forceRefresh = false): Promise<string> {
+async function getBearerToken(forceRefresh = false): Promise<string | null> {
   let user = getAuth().currentUser;
   if (!user) user = await waitForFirebaseUser(8000);
-  if (!user) throw new Error("missing bearer token");
+  if (!user) return null;
   return await user.getIdToken(forceRefresh);
 }
 
@@ -74,7 +74,7 @@ async function requestWithAuth(
     const token = await getBearerToken(forceRefresh);
     const headers = {
       ...(init.headers || {}),
-      Authorization: `Bearer ${token}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
     return fetch(url, {
       ...init,

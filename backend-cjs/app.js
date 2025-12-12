@@ -297,6 +297,9 @@ app.use("/api/leaderboard", ...secureChain, leaderboard_1.default);
 app.use("/api/achievements", ...secureChain, achievements_1.default);
 app.use("/api/missions", ...secureChain, missions_1.default);
 app.use("/api/tasks", ...secureChain, tasks_1.default);
+// Dishes search/proxy
+const dishes_1 = __importDefault(require("./backend-api/dishes"));
+app.use("/api/dishes", ...secureChain, dishes_1.default);
 app.use("/api/referral", ...secureChain, referral_1.default);
 app.use("/api/ingest", ...secureChain, ingest_1.default);
 app.use("/api/metrics/ingest", metricsIngest_1.default);

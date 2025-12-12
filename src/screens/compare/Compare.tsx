@@ -119,23 +119,35 @@ export default function Compare() {
     );
   }, [id]);
 
-  const selectedNames = useMemo(() => {
-    return (items || []).map((it: any) => String(it.name || it.id || '')?.toLowerCase()).filter(Boolean);
+  const selectedKeys = useMemo(() => {
+    const set = new Set<string>();
+    (items || []).forEach((it: any) => {
+      const nm = String(it.name || '').toLowerCase();
+      const id = String(it.id || '').toLowerCase();
+      if (nm) set.add(nm);
+      if (id) set.add(id);
+    });
+    return set;
   }, [items]);
 
   const columns: Column[] = useMemo(() => {
     if (!restaurant?.priceBreakdown?.length) return [];
-    return restaurant.priceBreakdown.map(p => {
-      const filteredItems =
-        selectedNames.length > 0
-          ? p.items.filter((it: any) => selectedNames.includes(String(it.name || it.menu_id || '').toLowerCase()))
-          : p.items;
-      const itemsToUse = filteredItems.length ? filteredItems : p.items;
-      const filtered = { ...p, items: itemsToUse };
-      const { subtotal, total } = calcTotals(filtered as any);
-      return { ...(filtered as any), subtotal, total };
-    }).filter((p) => p.items.length > 0 || selectedNames.length === 0);
-  }, [restaurant, selectedNames]);
+    const hasFilter = selectedKeys.size > 0;
+    return restaurant.priceBreakdown
+      .map((p) => {
+        const itemsToUse = p.items.filter((it: any) => {
+          if (!hasFilter) return true;
+          const nm = String(it.name || it.menu_id || '').toLowerCase();
+          const id = String(it.menu_id || it.id || '').toLowerCase();
+          return (nm && selectedKeys.has(nm)) || (id && selectedKeys.has(id));
+        });
+        if (hasFilter && itemsToUse.length === 0) return null;
+        const filtered = { ...p, items: itemsToUse };
+        const { subtotal, total } = calcTotals(filtered as any);
+        return { ...(filtered as any), subtotal, total };
+      })
+      .filter((p): p is Column => Boolean(p));
+  }, [restaurant, selectedKeys]);
 
   const cheaper =
     columns.length >= 2
