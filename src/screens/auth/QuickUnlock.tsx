@@ -1,14 +1,26 @@
 // src/screens/auth/QuickUnlock.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { startAuthentication, platformAuthenticatorIsAvailable } from '@simplewebauthn/browser';
+import {
+  startAuthentication,
+  platformAuthenticatorIsAvailable,
+} from '@simplewebauthn/browser';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { toast } from '../../store/toast';
 import { emit } from '../../lib/events';
-import { requestAuthenticationOptions, verifyAuthentication } from '../../lib/webauthnClient';
+import {
+  requestAuthenticationOptions,
+  verifyAuthentication,
+} from '../../lib/webauthnClient';
 import { getActiveProfile } from '../../lib/profileStore';
 
+// File-level log so we know the bundle actually loaded
+console.log('[QuickUnlock] FILE LOADED – version 1.0.2');
+
 export default function QuickUnlock() {
+  // Component render log
+  console.log('[QuickUnlock] COMPONENT RENDER START');
+
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -17,75 +29,56 @@ export default function QuickUnlock() {
 
   const { lastName, lastPhone, hasPasskey } = useMemo(() => {
     try {
-      const lastUserName = localStorage.getItem('bw:lastUserName') || '';
-      const lastUserPhone =
-        localStorage.getItem('bw:lastUserPhone') ||
-        localStorage.getItem('bw.lastPhone') ||
-        '';
-
-      const has = localStorage.getItem('bw:hasPasskey') === 'true';
-
-      console.log('[QuickUnlock] useMemo init', {
-        lastUserName,
-        lastUserPhone,
-        hasPasskeyStorage: localStorage.getItem('bw:hasPasskey'),
-      });
-
       return {
-        lastName: lastUserName,
-        lastPhone: lastUserPhone,
-        hasPasskey: has,
+        lastName: localStorage.getItem('bw:lastUserName') || '',
+        lastPhone:
+          localStorage.getItem('bw:lastUserPhone') ||
+          localStorage.getItem('bw.lastPhone') ||
+          '',
+        hasPasskey: localStorage.getItem('bw:hasPasskey') === 'true',
       };
-    } catch (err) {
-      console.warn('[QuickUnlock] useMemo init failed', err);
+    } catch {
       return { lastName: '', lastPhone: '', hasPasskey: false };
     }
   }, []);
 
   useEffect(() => {
     console.log('[QuickUnlock] mount', {
-      lastName,
       lastPhone,
       hasPasskey,
-      rawHasPasskey: localStorage.getItem('bw:hasPasskey'),
     });
-  }, [lastName, lastPhone, hasPasskey]);
+  }, [lastPhone, hasPasskey]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function detect() {
-      console.log('[QuickUnlock] detect() start');
-
       if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-        console.log('[QuickUnlock] WebAuthn not available in this environment');
         setSupported(false);
         return;
       }
 
       try {
         const available = await platformAuthenticatorIsAvailable();
-        console.log('[QuickUnlock] platformAuthenticatorIsAvailable result', {
-          available,
-          cancelled,
-        });
         if (!cancelled) setSupported(available);
       } catch (err) {
-        console.warn('[QuickUnlock] platformAuthenticatorIsAvailable threw', err);
+        console.warn(
+          '[QuickUnlock] platformAuthenticatorIsAvailable failed, assuming supported',
+          err,
+        );
         if (!cancelled) setSupported(true);
       }
     }
 
     detect();
-
     return () => {
       cancelled = true;
-      console.log('[QuickUnlock] detect() cleanup: cancelled=true');
     };
   }, []);
 
   async function runPasskey() {
-    console.log('[QuickUnlock] runPasskey() called', {
+    // Click log so we know the handler actually runs
+    console.log('[QuickUnlock] runPasskey CLICK', {
       supported,
       hasPasskey,
       lastPhone,
@@ -93,16 +86,13 @@ export default function QuickUnlock() {
     });
 
     if (!hasPasskey || !lastPhone) {
-      console.warn('[QuickUnlock] missing hasPasskey/lastPhone, redirecting to OTP', {
-        hasPasskey,
-        lastPhone,
-      });
+      console.log('[QuickUnlock] No saved passkey or phone, redirecting to OTP login');
       nav('/onboarding/auth/phone?mode=login', { replace: true });
       return;
     }
 
     if (supported === false) {
-      console.warn('[QuickUnlock] supported=false, showing device-unavailable message');
+      console.log('[QuickUnlock] Passkeys marked unsupported on this device');
       toast.error('Passkeys are unavailable on this device.');
       return;
     }
@@ -112,46 +102,40 @@ export default function QuickUnlock() {
     setErrorMsg(null);
 
     try {
-      console.log('[QuickUnlock] requesting options from backend…', { lastPhone });
+      console.log('[QuickUnlock] Fetching authentication options…');
       const options = await requestAuthenticationOptions(lastPhone);
-      console.log('[QuickUnlock] options received', options);
+      console.log('[QuickUnlock] Authentication options received:', options);
 
       if (!options || !options.challenge) {
-        console.error('[QuickUnlock] options missing challenge', options);
         throw new Error('Passkey challenge unavailable. Use OTP.');
       }
 
       setStatus('Waiting for your device…');
-      console.log('[QuickUnlock] calling startAuthentication…');
+      console.log('[QuickUnlock] Calling startAuthentication…');
       const assertion = await startAuthentication({ optionsJSON: options });
-      console.log('[QuickUnlock] assertion received', assertion);
+      console.log('[QuickUnlock] Assertion from device:', assertion);
 
       setStatus('Verifying…');
-      console.log('[QuickUnlock] sending assertion to verifyAuthentication…');
+      console.log('[QuickUnlock] Verifying assertion with backend…');
       const verification = await verifyAuthentication(lastPhone, assertion);
-      console.log('[QuickUnlock] verification response', verification);
+      console.log('[QuickUnlock] Verification result:', verification);
 
-      const token = (verification as any)?.token;
-      console.log('[QuickUnlock] extracted token', {
-        hasToken: !!token,
-        tokenPreview: token ? String(token).slice(0, 12) + '…' : null,
-      });
-
+      const token = verification?.token;
       if (!token) {
         throw new Error('No session token returned. Please sign in again.');
       }
 
+      console.log('[QuickUnlock] Signing in with custom token…');
       const auth = getAuth();
-      console.log('[QuickUnlock] signing in with custom token via Firebase…');
       await signInWithCustomToken(auth, token);
 
       try {
-        console.log('[QuickUnlock] storing session + local hints…');
+        console.log('[QuickUnlock] Saving session + local hints…');
         sessionStorage.setItem('bw.session.phone', lastPhone);
         sessionStorage.setItem('bw.auth.verified', '1');
         localStorage.setItem('bw.lastPhone', lastPhone);
-      } catch (err) {
-        console.warn('[QuickUnlock] failed to persist session/local hints', err);
+      } catch (storageErr) {
+        console.warn('[QuickUnlock] Failed to write session/localStorage hints', storageErr);
       }
 
       emit('bw:auth:changed', null);
@@ -159,31 +143,30 @@ export default function QuickUnlock() {
       // Remember last user info for next time (after profile load)
       try {
         const prof = getActiveProfile();
-        console.log('[QuickUnlock] active profile after unlock', prof);
-
-        // NOTE: using prof.name and prof.phone exactly as before
-        if (prof?.name) localStorage.setItem('bw:lastUserName', prof.name as any);
-        if (prof?.phone) localStorage.setItem('bw:lastUserPhone', prof.phone as any);
+        console.log('[QuickUnlock] Active profile at unlock:', prof);
+        if (prof?.name) localStorage.setItem('bw:lastUserName', prof.name);
+        if (prof?.phone) localStorage.setItem('bw:lastUserPhone', prof.phone);
         localStorage.setItem('bw:hasPasskey', 'true');
-      } catch (err) {
-        console.warn('[QuickUnlock] getActiveProfile / remember-last-user failed', err);
+      } catch (profErr) {
+        console.warn('[QuickUnlock] Failed to cache profile hints', profErr);
       }
 
-      console.log('[QuickUnlock] success → navigating to /home');
+      console.log('[QuickUnlock] Navigation to /home');
       nav('/home', { replace: true });
     } catch (err: any) {
-      console.error('[QuickUnlock] FAILED', {
-        err,
-        name: err?.name,
-        message: err?.message,
-        code: err?.code,
-        status: err?.status,
-        response: err?.response,
-        data: err?.data,
-      });
+      // SUPER noisy logging so we can see exactly what happens
+      console.error('[QuickUnlock] runPasskey ERROR', err);
 
       const code = String(err?.name || '').toLowerCase();
       const statusCode = typeof err?.status === 'number' ? err.status : null;
+
+      console.log('[QuickUnlock] Error details:', {
+        name: err?.name,
+        message: err?.message,
+        code,
+        statusCode,
+        full: err,
+      });
 
       const msg =
         code === 'notallowederror' || code === 'aborterror'
@@ -197,16 +180,12 @@ export default function QuickUnlock() {
     } finally {
       setBusy(false);
       setStatus('');
-      console.log('[QuickUnlock] runPasskey() finished', {
-        busy: false,
-      });
+      console.log('[QuickUnlock] runPasskey FINISHED');
     }
   }
 
-  const useAnother = () => {
-    console.log('[QuickUnlock] useAnother() → redirecting to OTP login');
+  const useAnother = () =>
     nav('/onboarding/auth/phone?mode=login', { replace: true });
-  };
 
   return (
     <div className="min-h-dvh grid place-items-center px-4 py-8 text-white">
