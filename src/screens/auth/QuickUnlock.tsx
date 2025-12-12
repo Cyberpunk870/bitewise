@@ -1,11 +1,14 @@
-// src/screens/auth/QuickUnlock.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   startAuthentication,
   platformAuthenticatorIsAvailable,
 } from '@simplewebauthn/browser';
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import {
+  getAuth,
+  signInWithCustomToken,
+  onAuthStateChanged,
+} from 'firebase/auth';
 import { toast } from '../../store/toast';
 import { emit } from '../../lib/events';
 import {
@@ -14,14 +17,14 @@ import {
 } from '../../lib/webauthnClient';
 import { getActiveProfile } from '../../lib/profileStore';
 
-// File-level log so we know the bundle actually loaded
-console.log('[QuickUnlock] FILE LOADED – version 1.0.2');
+const log = (...args: any[]) => console.log('[QuickUnlock]', ...args);
+const logErr = (...args: any[]) => console.error('[QuickUnlock]', ...args);
+
+log('FILE LOADED v1.0.4');
 
 export default function QuickUnlock() {
-  // Component render log
-  console.log('[QuickUnlock] COMPONENT RENDER START');
-
   const nav = useNavigate();
+
   const [busy, setBusy] = useState(false);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -29,7 +32,7 @@ export default function QuickUnlock() {
 
   const { lastName, lastPhone, hasPasskey } = useMemo(() => {
     try {
-      return {
+      const result = {
         lastName: localStorage.getItem('bw:lastUserName') || '',
         lastPhone:
           localStorage.getItem('bw:lastUserPhone') ||
@@ -37,36 +40,40 @@ export default function QuickUnlock() {
           '',
         hasPasskey: localStorage.getItem('bw:hasPasskey') === 'true',
       };
-    } catch {
+      log('useMemo init', result);
+      return result;
+    } catch (err) {
+      logErr('useMemo error reading localStorage', err);
       return { lastName: '', lastPhone: '', hasPasskey: false };
     }
   }, []);
 
+  // 1) Log mount
   useEffect(() => {
-    console.log('[QuickUnlock] mount', {
-      lastPhone,
-      hasPasskey,
-    });
+    log('component mounted', { lastPhone, hasPasskey });
   }, [lastPhone, hasPasskey]);
 
+  // 2) Detect platform authenticator availability
   useEffect(() => {
     let cancelled = false;
 
     async function detect() {
       if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        log('[detect] WebAuthn not supported by browser');
         setSupported(false);
         return;
       }
-
       try {
         const available = await platformAuthenticatorIsAvailable();
-        if (!cancelled) setSupported(available);
+        if (!cancelled) {
+          log('[detect] platformAuthenticatorIsAvailable', { available });
+          setSupported(available);
+        }
       } catch (err) {
-        console.warn(
-          '[QuickUnlock] platformAuthenticatorIsAvailable failed, assuming supported',
-          err,
-        );
-        if (!cancelled) setSupported(true);
+        if (!cancelled) {
+          logErr('[detect] error, assuming supported', err);
+          setSupported(true);
+        }
       }
     }
 
@@ -76,24 +83,34 @@ export default function QuickUnlock() {
     };
   }, []);
 
-  async function runPasskey() {
-    // Click log so we know the handler actually runs
-    console.log('[QuickUnlock] runPasskey CLICK', {
-      supported,
-      hasPasskey,
-      lastPhone,
-      busy,
+  // 3) Critical: watch Firebase auth state and navigate when user is logged in
+  useEffect(() => {
+    const auth = getAuth();
+    const unsub = onAuthStateChanged(auth, (user) => {
+      log('[authStateChanged]', { authed: !!user, uid: user?.uid, phone: user?.phoneNumber });
+      if (user) {
+        // if anything went weird in runPasskey navigation, this guarantees exit
+        nav('/home', { replace: true });
+      }
     });
 
+    return () => unsub();
+  }, [nav]);
+
+  async function runPasskey() {
+    log('[runPasskey] CLICK', { hasPasskey, lastPhone, supported });
+
     if (!hasPasskey || !lastPhone) {
-      console.log('[QuickUnlock] No saved passkey or phone, redirecting to OTP login');
+      log('[runPasskey] missing hasPasskey/lastPhone – redirecting to OTP login');
       nav('/onboarding/auth/phone?mode=login', { replace: true });
       return;
     }
 
     if (supported === false) {
-      console.log('[QuickUnlock] Passkeys marked unsupported on this device');
-      toast.error('Passkeys are unavailable on this device.');
+      const msg = 'Passkeys are unavailable on this device.';
+      setErrorMsg(msg);
+      toast.error(msg);
+      log('[runPasskey] supported === false, aborting');
       return;
     }
 
@@ -101,41 +118,49 @@ export default function QuickUnlock() {
     setStatus('Requesting device passkey…');
     setErrorMsg(null);
 
+    let verification: any = null;
+
     try {
-      console.log('[QuickUnlock] Fetching authentication options…');
+      log('[runPasskey] requesting options from backend…', { lastPhone });
       const options = await requestAuthenticationOptions(lastPhone);
-      console.log('[QuickUnlock] Authentication options received:', options);
+      log('[runPasskey] options received', options);
 
       if (!options || !options.challenge) {
         throw new Error('Passkey challenge unavailable. Use OTP.');
       }
 
       setStatus('Waiting for your device…');
-      console.log('[QuickUnlock] Calling startAuthentication…');
+
+      log('[runPasskey] calling startAuthentication with optionsJSON');
       const assertion = await startAuthentication({ optionsJSON: options });
-      console.log('[QuickUnlock] Assertion from device:', assertion);
+      log('[runPasskey] assertion received from browser', assertion);
 
       setStatus('Verifying…');
-      console.log('[QuickUnlock] Verifying assertion with backend…');
-      const verification = await verifyAuthentication(lastPhone, assertion);
-      console.log('[QuickUnlock] Verification result:', verification);
+
+      log('[runPasskey] verifying assertion with backend…');
+      verification = await verifyAuthentication(lastPhone, assertion);
+      log('[runPasskey] verification result from backend', verification);
 
       const token = verification?.token;
       if (!token) {
         throw new Error('No session token returned. Please sign in again.');
       }
 
-      console.log('[QuickUnlock] Signing in with custom token…');
       const auth = getAuth();
+      log('[runPasskey] signing in with Firebase custom token…');
       await signInWithCustomToken(auth, token);
+      log('[runPasskey] firebase sign-in OK', {
+        uid: auth.currentUser?.uid,
+        phone: auth.currentUser?.phoneNumber,
+      });
 
+      // Persist session hints
       try {
-        console.log('[QuickUnlock] Saving session + local hints…');
         sessionStorage.setItem('bw.session.phone', lastPhone);
         sessionStorage.setItem('bw.auth.verified', '1');
         localStorage.setItem('bw.lastPhone', lastPhone);
-      } catch (storageErr) {
-        console.warn('[QuickUnlock] Failed to write session/localStorage hints', storageErr);
+      } catch (err) {
+        logErr('[runPasskey] error saving session hints', err);
       }
 
       emit('bw:auth:changed', null);
@@ -143,49 +168,72 @@ export default function QuickUnlock() {
       // Remember last user info for next time (after profile load)
       try {
         const prof = getActiveProfile();
-        console.log('[QuickUnlock] Active profile at unlock:', prof);
+        log('[runPasskey] getActiveProfile()', prof);
         if (prof?.name) localStorage.setItem('bw:lastUserName', prof.name);
         if (prof?.phone) localStorage.setItem('bw:lastUserPhone', prof.phone);
         localStorage.setItem('bw:hasPasskey', 'true');
-      } catch (profErr) {
-        console.warn('[QuickUnlock] Failed to cache profile hints', profErr);
+      } catch (err) {
+        logErr('[runPasskey] error saving profile hints', err);
       }
 
-      console.log('[QuickUnlock] Navigation to /home');
+      // We still navigate here; the authStateChanged effect is extra safety
+      log('[runPasskey] navigation to /home');
       nav('/home', { replace: true });
     } catch (err: any) {
-      // SUPER noisy logging so we can see exactly what happens
-      console.error('[QuickUnlock] runPasskey ERROR', err);
-
-      const code = String(err?.name || '').toLowerCase();
-      const statusCode = typeof err?.status === 'number' ? err.status : null;
-
-      console.log('[QuickUnlock] Error details:', {
-        name: err?.name,
-        message: err?.message,
-        code,
-        statusCode,
-        full: err,
-      });
+      const errName = String(err?.name || '').toLowerCase();
+      const statusCode =
+        typeof err?.status === 'number'
+          ? err.status
+          : typeof verification?.status === 'number'
+          ? verification.status
+          : null;
+      const backendError = verification?.error || err?.response?.data?.error;
 
       const msg =
-        code === 'notallowederror' || code === 'aborterror'
+        errName === 'notallowederror' || errName === 'aborterror'
           ? 'Passkey prompt was cancelled.'
-          : statusCode === 404
-          ? 'No passkey found. Use OTP to sign in again.'
+          : statusCode === 404 || backendError === 'no-passkey'
+          ? 'No passkey found for this account. Use OTP to sign in again.'
           : 'Could not unlock. Please try again or use OTP.';
+
+      logErr('[runPasskey] ERROR', {
+        err,
+        errName,
+        statusCode,
+        backendError,
+        verification,
+      });
 
       setErrorMsg(msg);
       toast.error(msg);
     } finally {
+      const auth = getAuth();
+      const authed = !!auth.currentUser;
+      log('[runPasskey] FINALLY', {
+        authed,
+        currentUser: auth.currentUser
+          ? {
+              uid: auth.currentUser.uid,
+              phone: auth.currentUser.phoneNumber,
+            }
+          : null,
+      });
+
       setBusy(false);
       setStatus('');
-      console.log('[QuickUnlock] runPasskey FINISHED');
+
+      // Extra safeguard: if somehow user is already authed, leave this screen.
+      if (authed) {
+        log('[runPasskey] FINALLY forcing navigation to /home because user is authed');
+        nav('/home', { replace: true });
+      }
     }
   }
 
-  const useAnother = () =>
+  const useAnother = () => {
+    log('[useAnother] clicked – going to OTP login');
     nav('/onboarding/auth/phone?mode=login', { replace: true });
+  };
 
   return (
     <div className="min-h-dvh grid place-items-center px-4 py-8 text-white">
